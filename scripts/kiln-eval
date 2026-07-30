@@ -1,0 +1,19 @@
+#!/bin/sh
+# Evaluate Lua in a running kiln over the IPC socket and print the reply.
+#
+#   scripts/kiln-eval 'return core ~= nil'
+#   echo 'STRESS_N = 1000; core.dirty()' | scripts/kiln-eval
+#
+# Socket: $KILN_SOCK if set, else $XDG_RUNTIME_DIR/kiln.sock. The protocol is
+# send-then-EOF: the compositor evaluates on half-close and writes one reply.
+set -eu
+sock="${KILN_SOCK:-${XDG_RUNTIME_DIR:-/tmp}/kiln.sock}"
+if [ ! -S "$sock" ]; then
+	echo "kiln-eval: no socket at $sock (set KILN_SOCK)" >&2
+	exit 1
+fi
+if [ $# -gt 0 ]; then
+	printf '%s' "$*" | nc -U -N "$sock"
+else
+	nc -U -N "$sock"
+fi

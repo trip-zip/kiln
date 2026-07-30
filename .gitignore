@@ -1,0 +1,5 @@
+build/
+.local.mk
+subprojects/wlroots/
+subprojects/.wraplock
+__pycache__/

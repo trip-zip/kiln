@@ -1,0 +1,24 @@
+#compdef kiln-client
+# Candidates come from the running compositor, so this file never goes stale
+# against the build it completes for.
+_kiln_client() {
+  # The client's own flags are not verb words, and leaving them in would shift
+  # every candidate to the wrong argument position.
+  local -a verb_words candidates
+  local w skip=0
+  for w in ${words[2,CURRENT-1]}; do
+    if (( skip )); then
+      skip=0
+    else
+      case "$w" in
+        --json) ;;
+        -s|--socket) skip=1 ;;
+        *) verb_words+=("$w") ;;
+      esac
+    fi
+  done
+  verb_words+=("${words[CURRENT]}")
+  candidates=(${(f)"$(kiln-client complete ${#verb_words} "${verb_words[@]}" 2>/dev/null)"})
+  _describe 'candidate' candidates
+}
+_kiln_client "$@"
