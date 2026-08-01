@@ -79,7 +79,8 @@ reproducibly.
     sudo make install    # install to /usr/local (override: make prefix=...)
 
 Launched from inside an existing Wayland or X session kiln opens as a nested
-window; from a bare TTY it runs on DRM. Copy the default config to
+window; from a bare TTY it runs on DRM. Installing also adds a session entry,
+so display managers list kiln at the login screen. Copy the default config to
 `~/.config/kiln/rc.lua` to change layout, keys, rules, theme, and chrome.
 `mod+Return` opens a terminal, `mod+s` shows every binding on one sheet, and
 `mod+shift+q` quits.

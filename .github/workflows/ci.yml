@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: install dependencies
+        run: >
+          pacman -Syu --noconfirm git meson ninja gcc pkgconf
+          wlroots0.20 wayland wayland-protocols libxkbcommon libinput
+          pixman luajit cairo pango gdk-pixbuf2 systemd-libs libdrm
+          openbsd-netcat desktop-file-utils
+
+      - uses: actions/checkout@v4
+
+      - name: build
+        run: |
+          meson setup build -Dpam=disabled -Dxwayland=disabled
+          ninja -C build
+
+      - name: lints
+        run: |
+          scripts/comment-lint.sh
+          scripts/widget-lint.sh
+          desktop-file-validate kiln.desktop
+
+      - name: headless smoke
+        run: |
+          export XDG_RUNTIME_DIR=/tmp/xdg
+          mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+          WLR_BACKENDS=headless KILN_RC=$PWD/kilnrc.lua KILN_SOCK=/tmp/k.sock ./build/kiln &
+          for _ in $(seq 50); do [ -S /tmp/k.sock ] && break; sleep 0.2; done
+          [ "$(KILN_SOCK=/tmp/k.sock scripts/kiln-eval 'return 1 + 1')" = "2" ]

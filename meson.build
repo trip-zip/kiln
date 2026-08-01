@@ -278,6 +278,9 @@ install_data(
   install_dir: datadir / 'fish/vendor_completions.d',
 )
 
+# Session entry, so display managers list kiln at the login screen.
+install_data('kiln.desktop', install_dir: datadir / 'wayland-sessions')
+
 # A Wayland client that drives xdg-activation on demand, so the activation
 # battery can prove C's seat->valid derivation with a real round trip instead
 # of restating the fact it means to test. Ungated: it needs only
