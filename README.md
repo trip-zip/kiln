@@ -29,27 +29,33 @@ A config declares what the screen should look like. Nothing imperative, no
 draw callbacks, no widget objects to construct and wire together.
 
 ```lua
-ui.bar(s, { edge = "top", color = th.bg }, function()
-    taglist(s)
-    tasklist(s)
-    ui.spacer()
-    ui.systray()
-    layoutbox(s)
-
-    -- floated to the parent's center, with a tooltip that is just a handler
-    ui.box({
-        id = "clock",
-        float = { to = "parent", anchor = "center" },
-        color = th.bg2, radius = 4, pad = { x = 8 }, align = "center",
-        on_hover = ui.tooltip(function() return os.date("%A %d %B %Y") end),
-    }, ui.clock)
+ui.bar(s, { edge = "top", dir = "row", h = th.bar_height,
+    color = th.bg, pad = { x = 8 } }, function()
+    ui.row({ w = "33.33%", h = "grow", gap = 6,
+            clip = { horizontal = true },
+            align = { y = "center" } }, function()
+        taglist(s)
+        tasklist(s)
+    end)
+    ui.row({ w = "33.33%", h = "grow", align = "center" }, function()
+        -- A tooltip is the on_hover handler ui.tooltip makes, nothing else.
+        ui.box({ id = "clock", color = th.bg2, radius = 4,
+            pad = { x = 8 },
+            on_hover = ui.tooltip(function()
+                return os.date("%A %d %B %Y")
+            end),
+        }, widgets.clock)
+    end)
+    ui.row({ w = "33.33%", h = "grow", gap = 6,
+            clip = { horizontal = true },
+            align = { x = "right", y = "center" } }, function()
+        widgets.systray()
+        layoutbox(s)
+    end)
 end)
 ```
 
-That is a real excerpt from the default config. A bar is a box with children. 
-So is a menu, a notification, and a tiled window's frame. 
-`ui.spacer()` takes the leftover room because Clay's solver gives it the
-leftover room, not because a bar widget has a spacer feature.
+A bar is a box with children. So is a menu, a notification, and a tiled window's frame. 
 
 The keybinding sheet below is generated from the live bindings, and the
 notifications come from kiln's own in-compositor notification daemon.
