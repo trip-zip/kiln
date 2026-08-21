@@ -93,11 +93,14 @@ so display managers list kiln at the login screen. Copy the default config to
 
 ## License
 
-GPLv3 (GNU General Public License, version 3 or later). See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 The layout engine is [Clay](https://github.com/nicbarker/clay) by Nic Barker,
-zlib licensed, vendored at `third_party/clay.h`.
+zlib licensed, vendored at `third_party/clay.h`, which keeps its own notice.
 
-kiln shares a maintainer with [SomeWM](https://github.com/trip-zip/somewm) and
-matches its license so work can move between them, and the default wallpaper
-shares the one from SomeWM. 
+kiln shares a maintainer with [SomeWM](https://github.com/trip-zip/somewm),
+which is GPLv3, and the default wallpaper shares the one from SomeWM. MIT here
+means work can still move from kiln into SomeWM.
+
+Releases up to and including `v0.1.0` were published under GPLv3; that grant
+stands for anyone who took the code under it. Everything after is MIT.
