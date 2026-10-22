@@ -1,0 +1,47 @@
+#!/bin/sh
+set -eu
+
+kiln_repo=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$kiln_repo"
+
+if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "$XDG_RUNTIME_DIR" ]; then
+    echo 'Run from your normal TTY login with XDG_RUNTIME_DIR set.' >&2
+    exit 1
+fi
+
+kiln_config=${KILN_RC:-${XDG_CONFIG_HOME:-$HOME/.config}/kiln/rc.lua}
+if [ ! -r "$kiln_config" ]; then
+    printf 'Cannot read config: %s\n' "$kiln_config" >&2
+    exit 1
+fi
+for kiln_command in make dbus-run-session foot; do
+    command -v "$kiln_command" >/dev/null || {
+        printf 'Required command missing: %s\n' "$kiln_command" >&2
+        exit 1
+    }
+done
+
+make
+umask 077
+kiln_trial=$(mktemp -d /tmp/kiln-seat-trial.XXXXXX)
+printf '%s\n' "$kiln_trial" > build/last-tty-trial
+printf 'Starting Kiln. Super+Shift+q quits.\nConfig: %s\nLog: %s/server.log\n' \
+    "$kiln_config" "$kiln_trial"
+
+kiln_result=0
+env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET \
+    -u WLR_LIBINPUT_NO_DEVICES -u WLR_RENDERER \
+    KILN_TRIAL="$kiln_trial" KILN_RC="$kiln_config" \
+    KILN_SOCK="$kiln_trial/eval.sock" WLR_BACKENDS=drm,libinput \
+    XDG_SESSION_TYPE=wayland \
+    dbus-run-session -- sh -c '
+        printf "%s\n" "$$" > "$KILN_TRIAL/compositor.pid"
+        exec ./build/kiln -s foot
+    ' >"$kiln_trial/server.log" 2>&1 || kiln_result=$?
+
+printf 'Kiln exited with status %s. Log: %s/server.log\n' \
+    "$kiln_result" "$kiln_trial"
+if [ "$kiln_result" -ne 0 ]; then
+    tail -n 60 "$kiln_trial/server.log"
+fi
+exit "$kiln_result"

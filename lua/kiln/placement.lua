@@ -1,27 +1,3 @@
--- Placement: named combinators as arithmetic over screen.workarea. There is
--- no placement record, no attach machinery and no apply pass, because a
--- floating client's geometry IS c.float, and a helper is one write of it.
---
--- Every helper is f(c, s); s defaults to the client's screen. They compose by
--- being called in order (no_offscreen after centered is two calls, not an
--- operator), and a rule takes one directly, because a rule already has a
--- callback:
---
---   rule { match_any = { app = { "pinentry" } },
---          props = { floating = true }, on = kiln.placement.centered }
---
--- Two facts a caller has to know, both stated rather than coded around:
---
--- Rules fire at map, before the client has committed a size, so a placement at
--- rule time places the box float_client would materialize (the client's ask, or
--- the fallback), not the size it may end up drawing at.
---
--- screen.workarea is core.box("workarea:<name>"), scoped to the CURRENT Clay
--- context. Inside a declare it is that screen's; called from a keybinding on
--- a multi-output setup, a screen that did not solve last reads nil and falls back
--- to the whole output, losing the bar inset. Single-output is honest today; the
--- multi-output case waits for a forcing fixture, as declare_or does (layout.lua).
-
 local state = require("kiln.state")
 
 local placement = {}
@@ -103,12 +79,14 @@ end
 function placement.no_overlap(c, s)
 	s = s or c.screen
 	local a, f = area(c, s), box(c)
-	local occ = {}
+	local occ, eligible, seen = {}, {}, {}
+    for _, o in ipairs(require('kiln').visible_clients(s)) do eligible[o]=true end
 	for _, t in ipairs(s.tags or {}) do
 		for _, o in ipairs(t.clients) do
 			if (t.selected or o.sticky) and o ~= c and o.mapped
-					and not o.minimized and o.floating and o.float ~= nil then
-				occ[#occ + 1] = o.float
+					and not o.minimized and o.floating and o.float ~= nil and eligible[o] and not seen[o] then
+                seen[o]=true
+				occ[#occ + 1] = box(o)
 			end
 		end
 	end
@@ -137,10 +115,11 @@ function placement.under_mouse(c, s)
 		return placement.centered(c, s)
 	end
 	local f = box(c)
-	f.x = p.x - math.floor(f.width / 2)
-	f.y = p.y - math.floor(f.height / 2)
-	put(c, f)
-	return placement.no_offscreen(c, s)
+	s = s or c.screen
+    local a = area(c,s)
+    f.x = clamp(p.x-(s.x or 0)-math.floor(f.width/2),a.x,a.x+a.width-f.width)
+    f.y = clamp(p.y-(s.y or 0)-math.floor(f.height/2),a.y,a.y+a.height-f.height)
+    return put(c,f)
 end
 
 return placement

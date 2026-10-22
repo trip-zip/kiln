@@ -1,18 +1,4 @@
--- The declare-hook registry: functions the runtime calls inside every screen's
--- declare, so chrome can be declared per frame by something that is not a bar.
---
--- A bar was the only per-frame slot a config owned, and a bar RESERVES an edge:
--- anything declared through one is a strut zone whether it wants to be or not.
--- Chrome that floats (a popup, a result list, an overlay) had to be smuggled
--- into a bar's declare function and pay for a reservation it never used.
---
--- Position is the other half of what this is for. Hooks run after the built-in
--- chrome that owns an element id, so a hook's float may attach to any of it on
--- the very first frame both exist. A float whose target has NEVER been declared
--- is a Clay error and aborts the compositor, which is the whole reason chrome
--- declared before this point can be attached to and chrome declared after it
--- cannot.
-
+-- Hooks run in registration order after the built-in desktop elements.
 local Bus = require("kiln.bus")
 
 local hook = {}
@@ -37,23 +23,16 @@ function hook.remove(fn)
 	end
 end
 
--- Called by the frame handler inside each screen's declare.
---
--- A failing hook is reported and the rest still run, because one config's
--- broken widget must not take the desktop's chrome with it. What it costs is
--- one frame of misnesting: elements the hook left open are still open when the
--- next hook declares, and C rebalances Clay's stack after the handler returns
--- rather than aborting on it. The next dirty frame declares from scratch.
+-- A failed hook must reject the whole candidate, including staged handlers.
 function hook.run(s)
-	-- Snapshot, so a hook that registers or removes one mid-declare does not
-	-- skew this pass. Bus:emit guards its listeners the same way.
-	local snapshot = { unpack(hooks) }
-	for _, fn in ipairs(snapshot) do
-		local ok, err = pcall(fn, s)
-		if not ok then
-			Bus.on_error("declare", err)
-		end
-	end
+    local snapshot = { unpack(hooks) }
+    for _, fn in ipairs(snapshot) do
+        local ok, err = xpcall(function() fn(s) end, debug.traceback)
+        if not ok then
+            pcall(Bus.on_error, "declare", err)
+            error(err, 0)
+        end
+    end
 end
 
 -- The reload pair, and the tiers it draws. mark() runs after every stdlib
@@ -62,6 +41,7 @@ end
 -- survive a reload, and everything the config added is dropped. A config's
 -- hooks come back by the same door they arrived through, the rc running again.
 function hook.mark()
+	if marked then return end
 	marked = { unpack(hooks) }
 end
 

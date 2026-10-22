@@ -1,27 +1,36 @@
-# Candidates come from the running compositor, so this file never goes stale
-# against the build it completes for.
 function __kiln_client_complete
     set -l typed (commandline -opc)
-    # The client's own flags are not verb words, and leaving them in would
-    # shift every candidate to the wrong argument position.
+    set -l options
     set -l words
-    set -l skip 0
+    set -l leading 1
+    set -l socket_pending 0
     for w in $typed[2..-1]
-        if test $skip -eq 1
-            set skip 0
-        else
-            switch $w
+        if test $socket_pending -eq 1
+            set -a options --socket "$w"
+            set socket_pending 0
+        else if test $leading -eq 1
+            switch "$w"
                 case --json
                 case -s --socket
-                    set skip 1
+                    set socket_pending 1
+                case -h --help
+                    return
                 case '*'
-                    set -a words $w
+                    set leading 0
+                    set -a words "$w"
             end
+        else
+            set -a words "$w"
         end
     end
-    set -a words (commandline -ct)
-    kiln-client complete (count $words) $words 2>/dev/null
+    if test $socket_pending -eq 1
+        return
+    end
+    set -l current (commandline -ct)
+    if not set -q current[1]
+        set current ''
+    end
+    set -a words "$current"
+    command "$typed[1]" $options complete (count $words) $words 2>/dev/null
 end
-complete -c kiln-client -f -a "(__kiln_client_complete)"
-complete -c kiln-client -l json -d 'reply as JSON'
-complete -c kiln-client -l socket -r -d 'socket path'
+complete -c kiln-client -f -a '(__kiln_client_complete)'

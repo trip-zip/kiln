@@ -27,6 +27,7 @@ if cache_home == nil or cache_home == "" then
 	cache_home = (os.getenv("HOME") or ".") .. "/.cache"
 end
 local asset_dir = cache_home .. "/kiln/assets"
+local function quote(s) return "'" .. s:gsub("'", "'\"'\"'") .. "'" end
 
 -- Existence, the only filesystem question this asks, and also the RENDER CHECK.
 -- rsvg-convert may be missing or may fail, and a path that decodes to nothing
@@ -77,7 +78,7 @@ function M.request(name, w, h, svg)
 		return key
 	end
 	if not dir_made then
-		os.execute("mkdir -p '" .. asset_dir .. "'")
+		os.execute("mkdir -p " .. quote(asset_dir))
 		dir_made = true
 	end
 	local f = io.open(asset_dir .. "/" .. key .. ".svg", "w")
@@ -88,8 +89,8 @@ function M.request(name, w, h, svg)
 	f:close()
 	queued[key] = true
 	pending[#pending + 1] = string.format(
-		"rsvg-convert -w %d -h %d -o '%s' '%s'",
-		w, h, asset_png(key), asset_dir .. "/" .. key .. ".svg")
+		"rsvg-convert -w %d -h %d -o %s %s",
+		w, h, quote(asset_png(key)), quote(asset_dir .. "/" .. key .. ".svg"))
 	return key
 end
 

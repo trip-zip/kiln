@@ -29,8 +29,15 @@ function M.on_event(ev)
 	if ev.name == "item" then
 		local _, it = find(ev.service)
 		if it == nil then
-			it = { service = ev.service }
-			table.insert(items, it)
+			it = { service = ev.service, _order = ev._order }
+            -- Async snapshots can finish out of order; registration is the stable fact.
+            local at = #items + 1
+            if it._order then
+                for i, current in ipairs(items) do
+                    if current._order and current._order > it._order then at = i; break end
+                end
+            end
+            table.insert(items, at, it)
 		end
 		-- The upsert: the same service arriving again is the same item with new
 		-- facts. Any field may be nil (the item offered nothing there).

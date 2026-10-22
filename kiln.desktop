@@ -1,5 +1,0 @@
-[Desktop Entry]
-Name=kiln
-Comment=A Wayland compositor whose entire surface is one Clay layout tree per screen
-Exec=kiln
-Type=Application

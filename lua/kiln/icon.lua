@@ -1,16 +1,5 @@
--- App-to-icon-path lookup: the Lua leg that turns an app_id (or an
--- X11 class) into an icon file, so the titlebar and tasklist slots stop being
--- placeholder squares. This is the FIRST filesystem access in the production
--- layer, and it is bounded on purpose: XDG dirs, one .desktop Icon= line, and a
--- FIXED list of icon-theme probes. No index.theme parse, no inherits chain, no
--- theme setting. A full theme resolver runs hundreds of lines; the fixed list
--- is the small answer, and a name that resolves to nothing is nil, which the
--- widgets already render as the placeholder they had.
---
--- The X11 icon pixels a client ships are NOT this module's business: C decodes
--- the largest _NET_WM_ICON into the cache and hands Lua the key as c.icon, so
--- M.client prefers that and only falls back here (a Wayland client has no such
--- fact, and neither does an X11 client that shipped no icon).
+-- Bounded XDG lookup keeps icon probing out of steady declarations.
+-- A missing path remains nil so widgets can draw their placeholder.
 
 local M = {}
 
@@ -71,13 +60,8 @@ end
 -- No theme name, no inherits chain. An absolute path (or one an Icon= line gave
 -- verbatim) is taken as-is; a bare name is resolved against the list.
 --
--- Sized pngs first, scalable LAST. png is builtin to gdk-pixbuf; svg is
--- not, and a system that ships neither a pixbuf svg loader nor a glycin one
--- decodes nothing from the scalable dir, which renders the cell blank. Nothing
--- in Lua can ask whether a path will decode (that is C's answer, and asking for
--- it is a primitive this row does not buy), so the order is the whole lever:
--- probe what is most likely to decode first. svg stays in the list, so an
--- svg-only theme still resolves, decodable or not.
+-- Prefer sized PNGs before scalable SVGs. Readability cannot promise that
+-- the renderer has a decoder for the format; decoding stays with the renderer.
 local sizes = { "128x128", "64x64", "48x48", "32x32", "24x24", "16x16",
 	"scalable" }
 
@@ -127,10 +111,7 @@ function M.path(name)
 	return path
 end
 
--- The client's icon: the C fact wins (X11 pixels C already decoded, keyed as
--- c.icon), else the lookup on the app_id, else on the class (X11 clients have no
--- app_id) and its lowercase form (WM_CLASS is often title-cased where the
--- .desktop is not).
+-- A supplied image key wins; app ID and class names provide file fallbacks.
 function M.client(c)
 	if c.icon ~= nil then
 		return c.icon

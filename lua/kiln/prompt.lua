@@ -1,32 +1,15 @@
--- The prompt widget: an inline text entry, pure Lua on Clay, holding
--- a keygrabber for its lifetime. Zero C. The caret is a box, the selection is
--- a colored box behind a text run, and the layout is Clay's row solve, so
--- nothing here measures a glyph or owns a pixel. Every launcher, rename box,
--- and run-command line is this.
---
--- Composed text needs no code here at all: ev.utf8 carries what the xkb
--- compose state resolved C-side (empty mid-sequence, the grapheme on the
--- completing key), so a dead key types an accent because the prompt inserts
--- whatever utf8 the key brought.
 
 local ui = require("kiln.ui")
 local state = require("kiln.state")
 local grab = require("kiln.grab")
 
 local prompt = {}
+local services=require("kiln.desktop_services")
 
--- The running prompt, or nil. One at a time: the keygrabber is one claim.
 prompt.active = nil
 
--- The default run-history, shared across prompt.run calls that do not bring
--- their own. In memory only; the compositor writes no history file.
 prompt.history = {}
 
--- LuaJIT has no utf8 library, and the whole point of this widget is that a
--- keypress can produce a multi-byte grapheme, so every motion and delete steps
--- over codepoints, never bytes. i is a byte offset (0 .. #s).
--- A byte offset is a boundary: the byte AFTER it is the one that says whether
--- the offset splits a codepoint, so both steps test s:byte(j + 1).
 local function prev_char(s, i)
 	local j = i - 1
 	while j > 0 and s:byte(j + 1) >= 0x80 and s:byte(j + 1) < 0xC0 do
@@ -43,9 +26,6 @@ local function next_char(s, i)
 	return j <= #s and j or #s
 end
 
--- Word motion: skip the run of spaces behind (ahead of) the cursor, then the
--- run of non-spaces. Bytes are safe here: a UTF-8 continuation byte is never
--- ASCII space, so a multi-byte word is one unbroken non-space run.
 local function prev_word(s, i)
 	while i > 0 and s:sub(i, i):match("%s") do
 		i = i - 1
@@ -75,8 +55,6 @@ local function dirty(self)
 	end
 end
 
--- The selected span as an ordered byte range, or nil when there is no
--- selection (no anchor, or an anchor the cursor sits on).
 function p:selection()
 	if self.anchor == nil or self.anchor == self.cursor then
 		return nil
@@ -84,9 +62,6 @@ function p:selection()
 	return math.min(self.anchor, self.cursor), math.max(self.anchor, self.cursor)
 end
 
--- Move the cursor, extending the selection when shift is held and dropping it
--- otherwise. The one place the anchor is set, so no motion can leave a stale
--- one behind.
 function p:move(to, extend)
 	if extend then
 		if self.anchor == nil then
@@ -108,8 +83,6 @@ function p:delete(from, to)
 	self:changed()
 end
 
--- Drop the selection if there is one; the edit that follows applies at the
--- cursor the deletion leaves behind. Returns whether anything went.
 function p:delete_selection()
 	local a, b = self:selection()
 	if a == nil then
@@ -121,6 +94,7 @@ end
 
 function p:insert(str)
 	self:delete_selection()
+    if prompt.active~=self then return end
 	self.text = self.text:sub(1, self.cursor) .. str
 		.. self.text:sub(self.cursor + 1)
 	self.cursor = self.cursor + #str
@@ -128,17 +102,13 @@ function p:insert(str)
 end
 
 function p:changed()
-	-- A history walk that gets edited becomes a fresh line, exactly as a shell
-	-- does: the walk position is dropped, the stashed line is not restorable.
+    if prompt.active~=self then return end
 	self.hist_i = nil
 	if self.spec.changed ~= nil then
 		self.spec.changed(self.text)
 	end
 end
 
--- Walk the history. dir is -1 (older) or 1 (newer). The line in progress is
--- stashed on the first step back and restored when the walk returns past the
--- newest entry.
 function p:walk_history(dir)
 	local h = self.hist
 	if #h == 0 then
@@ -182,9 +152,8 @@ function p:stop()
 end
 
 function p:finish()
+    if prompt.active~=self then return end
 	local text = self.text
-	-- History keeps one copy of a line, most recent last, and never grows a
-	-- run of duplicates from someone hammering the same command.
 	if text ~= "" and self.hist[#self.hist] ~= text then
 		table.insert(self.hist, text)
 	end
@@ -195,14 +164,15 @@ function p:finish()
 end
 
 function p:cancel()
+    if prompt.active~=self then return end
 	self:stop()
 	if self.spec.cancelled ~= nil then
 		self.spec.cancelled()
 	end
 end
 
--- One queued key, routed here by the grabber claim ahead of every binding.
 function p:on_key(ev)
+    if prompt.active~=self then return end
 	if not ev.pressed then
 		return
 	end
@@ -249,16 +219,15 @@ function p:on_key(ev)
 			if text ~= nil then
 				self.text = text
 				self.cursor = math.max(0, math.min(cursor or #text, #text))
-				self.anchor = nil
+				while self.cursor>0 and self.cursor<#text and text:byte(self.cursor+1)>=0x80 and text:byte(self.cursor+1)<0xC0 do
+                    self.cursor=self.cursor-1
+                end
+                self.anchor = nil
 			end
 		end
 	elseif ev.utf8 ~= nil and ev.utf8 ~= "" and not ctrl
 			and not mods.alt and not mods.super
 			and ev.utf8:byte(1) >= 0x20 and ev.utf8:byte(1) ~= 0x7f then
-		-- The text leg, and the compose leg with it: whatever C resolved (a
-		-- plain letter, or the grapheme a dead-key sequence completed into)
-		-- goes in as typed. A mid-compose key carries "" and lands nowhere,
-		-- which is what makes the dead key silent until it resolves.
 		self:insert(ev.utf8)
 	else
 		return -- a modifier, a function key: nothing typed, nothing to repaint
@@ -266,14 +235,6 @@ function p:on_key(ev)
 	dirty(self)
 end
 
--- A Tab-cycle completion over a candidates function, in the spec.completion
--- shape (text, cursor) -> (text, cursor) or nil. On a fresh input it finds the
--- word behind the cursor (to whitespace, the prev_word convention), asks
--- candidates for that prefix, keeps the prefix matches, and returns the first;
--- called again on its own last output it advances the cycle, wrapping. Any input
--- it did not itself produce (an edit) resets the cycle. No matches returns nil,
--- and the Tab branch no-ops. The candidates fn is the caller's: a shell/PATH
--- source is config territory, not built here.
 function prompt.completion(candidates)
 	local matches, head, tail, idx, last_text, last_cur
 	return function(text, cursor)
@@ -300,21 +261,9 @@ function prompt.completion(candidates)
 	end
 end
 
--- prompt.run {
---   screen = s,                 -- default screen.focused
---   label = "Run: ",
---   text = "",                  -- initial content (cursor lands at its end)
---   done = function(text) end,  -- Return
---   cancelled = function() end, -- Escape
---   changed = function(text) end,
---   completion = function(text, cursor) return text, cursor end,  -- Tab
---   history = { ... },          -- default prompt.history
--- }
---
--- Returns the prompt object; :stop() closes it with no callback. Starting one
--- while another runs stops the first (the keyboard is one claim).
 function prompt.run(spec)
 	spec = spec or {}
+    if not services.live(spec.screen or screen.focused) then return end
 	local self = setmetatable({
 		spec = spec,
 		screen = spec.screen or screen.focused,
@@ -330,14 +279,9 @@ function prompt.run(spec)
 		prompt.active:stop()
 	end
 	prompt.active = self
-	-- The keygrabber IS the prompt's lifetime: it holds from here until stop,
-	-- and while it holds no binding fires and no client sees a key.
 	self.claim = grab.keygrabber {
 		key = function(ev) self:on_key(ev) end,
 		stopped = function()
-			-- Something else claimed the keyboard (or the grabber released
-			-- itself after an error). The prompt does not linger on screen
-			-- without the keys it needs.
 			if prompt.active == self then
 				prompt.active = nil
 				self.claim = nil
@@ -345,14 +289,11 @@ function prompt.run(spec)
 			end
 		end,
 	}
+    if not self.claim.active then self:stop(); return end
 	dirty(self)
 	return self
 end
 
--- The declare: cut the text at the cursor and at the selection edges, then
--- emit the runs in order with the caret box at its cut. Clay's row solve
--- places them, so the caret sits after the exact glyphs before it with no
--- text measurement anywhere in Lua.
 local function declare_text(self, th)
 	local t = self.text
 	local a, b = self:selection()
@@ -389,19 +330,6 @@ local function declare_text(self, th)
 	end
 end
 
--- Called by the runtime inside each screen's declare, after the clients: the
--- prompt is chrome in the overlay band, floating over whatever is tiled under
--- it. Nothing is declared when no prompt runs, or when it belongs to another
--- screen.
--- The prompt's width on a screen, resolved rather than handed to Clay: percent
--- sizing measures against the in-flow parent, and a float attached to the root
--- has none, so Clay would solve it to zero. The screen box is right there, so
--- this is arithmetic, not a workaround for a missing Clay.
---
--- Public because anything declared to LINE UP with the prompt needs the same
--- answer on the same frame, and the prompt's solved box cannot give it: on the
--- frame the prompt first appears there is no previous solve to read. The
--- launcher's result list is that caller.
 function prompt.width(s)
 	local w = state.theme.prompt_width
 	if type(w) == "string" then
@@ -423,6 +351,7 @@ function prompt.declare(s)
 		float = { to = "root", anchor = "top",
 			offset = { x = 0, y = th.prompt_offset }, band = "overlay" },
 		w = w,
+        clip={horizontal=true},
 		color = th.bg,
 		radius = 6,
 		pad = { x = 10, y = 8 },

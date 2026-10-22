@@ -1,136 +1,99 @@
 #!/usr/bin/env python3
-# A scripted StatusNotifierItem, for the systray battery (scripts/tray-test.sh).
-# It is a real SNI item on a real bus: it exports org.kde.StatusNotifierItem,
-# registers with the watcher kiln owns, and answers Activate/Scroll for real.
-# gdbus can only CALL a
-# bus, never EXPORT an object with properties, so the fixture that kiln reads
-# back has to be a program, and this is the smallest one (Gio, the same GLib
-# gdbus already links).
-#
-#   sni-item.py <busname> <mode> <markerfile>
-#
-# mode is "pixmap" (ship a 2x2 ARGB IconPixmap, exercising the pixels -> cache
-# key path) or "name" (ship an IconName, exercising the passthrough). Every
-# method call the item receives is appended to <markerfile>, so the battery can
-# prove tray_activate forwarded a real call. A tiny control interface at /Control
-# lets the battery flip the status (emitting NewStatus) and quit.
-
-import sys
-
+"""Private SNI peer with controllable, asynchronous property replies and receipts."""
+import argparse
+import os
 import gi
 
-gi.require_version("Gio", "2.0")
-from gi.repository import Gio, GLib  # noqa: E402
+gi.require_version('Gio','2.0')
+from gi.repository import Gio, GLib
 
-busname, mode, marker = sys.argv[1], sys.argv[2], sys.argv[3]
-
-# A 2x2 opaque image, ARGB32 in network byte order (A,R,G,B per pixel): red,
-# green, blue, white. Distinctive, and the numbers describe the buffer exactly.
-PIXELS = [
-    0xFF, 0xFF, 0x00, 0x00,
-    0xFF, 0x00, 0xFF, 0x00,
-    0xFF, 0x00, 0x00, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF,
-]
-
-state = {
-    "Category": "ApplicationStatus",
-    "Id": "test-item",
-    "Title": "Test Tray Item",
-    "Status": "Active",
-    "IconName": "network-wireless" if mode == "name" else "",
-    "Menu": "/NO_DBUSMENU",
-}
-
-ITEM_XML = """
-<node>
-  <interface name="org.kde.StatusNotifierItem">
-    <property name="Category" type="s" access="read"/>
-    <property name="Id" type="s" access="read"/>
-    <property name="Title" type="s" access="read"/>
-    <property name="Status" type="s" access="read"/>
-    <property name="IconName" type="s" access="read"/>
-    <property name="IconPixmap" type="a(iiay)" access="read"/>
-    <property name="Menu" type="o" access="read"/>
-    <method name="Activate">
-      <arg name="x" type="i" direction="in"/>
-      <arg name="y" type="i" direction="in"/>
-    </method>
-    <method name="SecondaryActivate">
-      <arg name="x" type="i" direction="in"/>
-      <arg name="y" type="i" direction="in"/>
-    </method>
-    <method name="Scroll">
-      <arg name="delta" type="i" direction="in"/>
-      <arg name="orientation" type="s" direction="in"/>
-    </method>
-    <signal name="NewIcon"/>
-    <signal name="NewTitle"/>
-    <signal name="NewStatus"><arg name="status" type="s"/></signal>
-  </interface>
-</node>
-"""
-
-CTRL_XML = """
-<node>
-  <interface name="test.Fixture">
-    <method name="SetStatus"><arg name="s" type="s" direction="in"/></method>
-    <method name="Quit"/>
-  </interface>
-</node>
-"""
-
-ITEM_IFACE = "org.kde.StatusNotifierItem"
-loop = GLib.MainLoop()
+p=argparse.ArgumentParser()
+p.add_argument('service');p.add_argument('mode',choices=['pixmap','name','malformed','missing','hold'])
+p.add_argument('marker');p.add_argument('--delay',type=int,default=0)
+p.add_argument('--path',default='/StatusNotifierItem');p.add_argument('--replace',action='store_true')
+a=p.parse_args()
+assert os.environ.get('DBUS_SESSION_BUS_ADDRESS','').startswith('unix:path='), 'explicit private address required'
+ITEM='org.kde.StatusNotifierItem'
+WATCHER='org.kde.StatusNotifierWatcher'
+conn=Gio.bus_get_sync(Gio.BusType.SESSION,None)
+loop=GLib.MainLoop()
+state=dict(Id='test-item',Title='Test Tray Item',Status='Active',IconName='network-wireless' if a.mode=='name' else '')
+mode=a.mode
+delay=a.delay
+PIXELS=[255,255,0,0, 128,0,255,0, 255,0,0,255, 255,255,255,255]
+item_xml='''<node><interface name="org.kde.StatusNotifierItem">
+<method name="Activate"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
+<method name="SecondaryActivate"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
+<method name="Scroll"><arg type="i" direction="in"/><arg type="s" direction="in"/></method>
+<signal name="NewIcon"/><signal name="NewTitle"/><signal name="NewStatus"><arg type="s"/></signal>
+</interface></node>'''
+properties_xml='''<node><interface name="org.freedesktop.DBus.Properties">
+<method name="Get"><arg type="s" direction="in"/><arg type="s" direction="in"/><arg type="v" direction="out"/></method>
+</interface></node>'''
+control_xml='''<node><interface name="test.Fixture">
+<method name="SetStatus"><arg type="s" direction="in"/></method>
+<method name="SetTitle"><arg type="s" direction="in"/></method>
+<method name="SetIcon"><arg type="s" direction="in"/></method>
+<method name="SetDelay"><arg type="i" direction="in"/></method>
+<method name="Register"><arg type="s" direction="in"/></method>
+<method name="Quit"/>
+</interface></node>'''
 
 
-def record(text):
-    with open(marker, "a") as f:
-        f.write(text + "\n")
+def record(line):
+    with open(a.marker,'a') as f:f.write(line+'\n')
 
 
-def item_get_property(conn, sender, path, iface, prop):
-    if prop == "IconPixmap":
-        rows = [(2, 2, PIXELS)] if mode == "pixmap" else []
-        return GLib.Variant("a(iiay)", rows)
-    if prop == "Menu":
-        return GLib.Variant("o", state["Menu"])
-    return GLib.Variant("s", state.get(prop, ""))
+def register(arg=None):
+    conn.call(WATCHER,'/StatusNotifierWatcher',WATCHER,'RegisterStatusNotifierItem',GLib.Variant('(s)',[arg or (a.path if a.path!='/StatusNotifierItem' else a.service)]),None,Gio.DBusCallFlags.NONE,2000,None,None)
 
 
-def item_method(conn, sender, path, iface, method, params, invocation):
-    record(method + " " + " ".join(str(a) for a in params.unpack()))
-    invocation.return_value(None)
+def item_method(conn,sender,path,iface,method,params,inv):
+    record(method+' '+' '.join(str(x) for x in params.unpack()))
+    inv.return_value(None)
 
 
-def ctrl_method(conn, sender, path, iface, method, params, invocation):
-    if method == "SetStatus":
-        state["Status"] = params.unpack()[0]
-        conn.emit_signal(None, "/StatusNotifierItem", ITEM_IFACE, "NewStatus",
-                         GLib.Variant("(s)", [state["Status"]]))
-    invocation.return_value(None)
-    if method == "Quit":
-        loop.quit()
+def property_method(conn,sender,path,iface,method,params,inv):
+    _,prop=params.unpack()
+    record('Get '+prop)
+    value=None
+    if mode!='missing' or prop=='Id':
+        if prop=='IconPixmap':
+            frames=[]
+            if mode in ('pixmap','blue'):
+                px=PIXELS if mode=='pixmap' else [255,30,80,230]*4
+                frames=[(1,1,[255,240,100,10]),(2,2,px)]
+            elif mode=='malformed':frames=[(-1,2,[1,2,3,4]),(2147483647,2147483647,[1,2,3,4]),(2,2,[255])]
+            value=GLib.Variant('a(iiay)',frames)
+        elif prop in state:value=GLib.Variant('s',state[prop])
+    def finish():
+        if value is None:inv.return_dbus_error('org.freedesktop.DBus.Error.UnknownProperty',prop)
+        else:inv.return_value(GLib.Variant('(v)',[value]))
+        record('Reply '+prop)
+        return False
+    if delay:GLib.timeout_add(delay,finish)
+    else:finish()
 
 
-conn = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-item_info = Gio.DBusNodeInfo.new_for_xml(ITEM_XML).interfaces[0]
-ctrl_info = Gio.DBusNodeInfo.new_for_xml(CTRL_XML).interfaces[0]
-conn.register_object("/StatusNotifierItem", item_info, item_method,
-                     item_get_property, None)
-conn.register_object("/Control", ctrl_info, ctrl_method, None, None)
+def control(conn,sender,path,iface,method,params,inv):
+    global delay,mode
+    v=params.unpack()
+    if method in ('SetStatus','SetTitle'):
+        field=method[3:];state[field]=v[0]
+        conn.emit_signal(None,a.path,ITEM,'New'+field,GLib.Variant('(s)',v) if field=='Status' else None)
+    elif method=='SetIcon':
+        mode=v[0];state['IconName']='network-wireless' if mode in ('name','malformed') else ''
+        conn.emit_signal(None,a.path,ITEM,'NewIcon',None)
+    elif method=='SetDelay':delay=v[0]
+    elif method=='Register':register(v[0])
+    inv.return_value(None)
+    if method=='Quit':loop.quit()
 
-conn.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus",
-               "org.freedesktop.DBus", "RequestName",
-               GLib.Variant("(su)", [busname, 0]), GLib.VariantType("(u)"),
-               Gio.DBusCallFlags.NONE, -1, None)
-
-# Register ASYNC, not sync: the watcher reads our properties BACK while handling
-# this call, so we must be able to answer during it, which means our own loop has
-# to be running. A synchronous register here would block before loop.run() and
-# deadlock against the watcher's readback.
-conn.call("org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher",
-          "org.kde.StatusNotifierWatcher", "RegisterStatusNotifierItem",
-          GLib.Variant("(s)", [busname]), None,
-          Gio.DBusCallFlags.NONE, -1, None, None)
+for path,xml,fn in [(a.path,item_xml,item_method),(a.path,properties_xml,property_method),('/Control',control_xml,control)]:
+    conn.register_object(path,Gio.DBusNodeInfo.new_for_xml(xml).interfaces[0],fn,None,None)
+flags=1|4|(2 if a.replace else 0)
+r=conn.call_sync('org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus','RequestName',GLib.Variant('(su)',[a.service,flags]),GLib.VariantType('(u)'),Gio.DBusCallFlags.NONE,2000,None)
+assert r.unpack()[0]==1,r
+record('Owner '+conn.get_unique_name())
+if mode!='hold':register()
 loop.run()

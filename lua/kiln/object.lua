@@ -60,6 +60,7 @@ function object.class(class_name)
 	end
 
 	function methods:emit(name, ...)
+		if self._data.dead then return end
 		self._bus:emit(name, self, ...)
 		class_bus:emit(name, self, ...)
 	end
@@ -77,6 +78,7 @@ function object.class(class_name)
 			return obj._data[key]
 		end,
 		__newindex = function(obj, key, value)
+			if obj._data.dead then return end
 			local s = setters[key]
 			if s ~= nil then
 				return s(obj, value)
@@ -114,6 +116,16 @@ end
 function object.reset()
 	for _, bus in ipairs(class_buses) do
 		bus:reset()
+	end
+end
+
+function object.retire(keep)
+	for handle, obj in pairs(registry) do
+		if not keep or not keep(obj) then
+		obj._data.dead, obj._data.mapped, obj._data.tags = true, false, {}
+		obj._bus:reset()
+		registry[handle] = nil
+		end
 	end
 end
 

@@ -15,8 +15,6 @@
 -- The reply carries no terminator. The socket closes after one reply, so EOF
 -- is the frame, and a payload holding a blank line cannot end it early.
 
-local state = require("kiln.state")
-
 local ipc = {}
 
 -- Handlers by verb name, plus declaration order so the `commands` verb reads
@@ -213,7 +211,7 @@ local function all_of(cname)
 	elseif cname == "screen" then
 		return screen.all()
 	elseif cname == "layer" then
-		return state.layers
+		return require("kiln.layers").all
 	elseif cname == "notification" then
 		return notification.all()
 	elseif cname == "tag" then
@@ -645,7 +643,7 @@ end, {
 	desc = "read a property off every object a selector resolves to",
 	args = {
 		{ name = "class", required = true, complete = "class" },
-		{ name = "selector", required = true },
+		{ name = "selector", required = true, complete = "selector" },
 		{ name = "property", required = true, complete = "property" },
 	},
 })
@@ -671,7 +669,7 @@ end, {
 	desc = "write a property on every object a selector resolves to",
 	args = {
 		{ name = "class", required = true, complete = "class" },
-		{ name = "selector", required = true },
+		{ name = "selector", required = true, complete = "selector" },
 		{ name = "property", required = true, complete = "property" },
 		{ name = "value", required = true },
 	},
@@ -720,7 +718,7 @@ end, {
 	desc = "invoke a method on every object a selector resolves to",
 	args = {
 		{ name = "class", required = true, complete = "class" },
-		{ name = "selector", required = true },
+		{ name = "selector", required = true, complete = "selector" },
 		{ name = "method", required = true, complete = "method" },
 		{ name = "arg", rest = true },
 	},
@@ -904,6 +902,14 @@ completers.output = function()
 	return out
 end
 
+completers.selector = function(ctx)
+	local out = { "all" }
+	local fn = completers[ctx.class]
+	if fn then for _, v in ipairs(fn(ctx)) do out[#out + 1] = v end end
+	for _, o in ipairs(all_of(ctx.class)) do out[#out + 1] = tostring(ident(o)) end
+	return out
+end
+
 completers.layout = layout_names
 
 completers.theme_key = function()
@@ -1075,7 +1081,7 @@ ipc.register("lock", function()
 end, { desc = "lock the session" })
 
 ipc.register("unlock", function()
-	kiln.unlock()
+	if not kiln.unlock() then error("unlock: authentication required or externally locked", 0) end
 	return "unlocked"
 end, { desc = "unlock the session" })
 
@@ -1098,12 +1104,9 @@ end, {
 })
 
 ipc.register("inspector", function(sname)
-	local s = sname ~= nil and one("screen", sname) or nil
-	return kiln.inspector(s) and "on" or "off"
-end, {
-	desc = "toggle the Clay debug inspector",
-	args = { { name = "screen", complete = "screen" } },
-})
+    local s = sname ~= nil and one("screen", sname) or nil
+    return kiln.inspector(s) and "on" or "off"
+end, {desc="toggle the Clay debug inspector",args={{name="screen",complete="screen"}}})
 
 ipc.register("notify", function(...)
 	local words = { ... }
@@ -1813,7 +1816,7 @@ end, { desc = "every key the config bound, as written" })
 
 ipc.register("rule.list", function()
 	local rows = {}
-	for i, r in ipairs(state.rules) do
+	for i, r in ipairs(kiln.rule.all()) do
 		local match, props = {}, {}
 		-- match and match_any are alternatives, and a spec may carry either
 		-- alongside its negative clauses; all of them read as one column.
@@ -1834,55 +1837,10 @@ ipc.register("rule.list", function()
 	return { cols = { "n", "match", "props", "on" }, rows = rows }
 end, { desc = "every client rule the config declared, in order" })
 
--- ---------------------------------------------------------------------
--- The raw path.
-
--- One result as a cell. tostring reaches config-supplied code by way of
--- __tostring, and a value that cannot say what it is says nothing rather
--- than costing the whole reply.
-local function cell(v)
-	local ok, s = pcall(tostring, v)
-	if not ok or type(s) ~= "string" then
-		return "?"
-	end
-	return s
-end
-
--- Joined as varargs rather than through a table, so a result that is nil
--- still occupies its column: select("#") counts what was returned, where a
--- table would stop at the first hole.
-local function join(ok, ...)
-	if not ok then
-		return "ERROR: " .. cell((...)) .. "\n"
-	end
-	local out = {}
-	for i = 1, select("#", ...) do
-		out[i] = cell((select(i, ...)))
-	end
-	return table.concat(out, "\t") .. "\n"
-end
-
--- Raw Lua over the socket: what every script and the dispatch wrapper itself
--- arrive as. Expression first, so `1+1` answers 2 instead of failing to parse
--- as a statement, then the whole text as a chunk.
-function ipc.eval(text)
-	local chunk, err = loadstring("return " .. text, "=ipc")
-	if chunk == nil then
-		chunk, err = loadstring(text, "=ipc")
-	end
-	if chunk == nil then
-		return "ERROR: " .. cell(err) .. "\n"
-	end
-	return join(pcall(chunk))
-end
-
--- ---------------------------------------------------------------------
+ipc.eval = kiln_eval
 
 function ipc.install(library)
 	kiln = library
-	-- The two globals this module adds. The socket calls them; nothing in a
-	-- config has any reason to.
-	kiln_eval = ipc.eval
 	kiln_ipc = ipc.dispatch
 	return ipc
 end

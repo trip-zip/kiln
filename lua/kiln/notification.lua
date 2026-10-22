@@ -63,27 +63,21 @@ local function dirty(n)
 	end
 end
 
--- The timeout, in seconds. A timer here is one-shot and cannot be cancelled
--- (core.timer returns nothing), so an armed expiry is disarmed by bumping the
--- generation it captured: the callback that wakes into a stale generation does
--- nothing. Re-arming on every property::timeout is what makes n.timeout live.
-local function arm(n)
-	-- Critical ignores the timeout entirely: a notification that matters
-	-- does not vanish on its own. Dismissing it is the user's job.
-	if n.urgency == "critical" then
-		return
-	end
-	local t = n.timeout
-	if t == nil or t <= 0 then -- 0 is sticky
-		return
-	end
-	n.gen = (n.gen or 0) + 1
-	local g = n.gen
-	core.timer(math.floor(t * 1000), function()
-		if n.alive and n.gen == g then
-			n:dismiss("expired")
-		end
-	end)
+-- Expiry is owned by the retained notification, with a monotonic deadline.
+local function cancel(n)
+    if n._timer then core.timer_cancel(n._timer); n._timer = nil end
+    n._deadline = nil
+end
+local function arm(n, remaining)
+    cancel(n)
+    if not n.alive or n.urgency == "critical" or not index_of(active, n) then return end
+    local t = remaining or n.timeout
+    if type(t) ~= "number" or t <= 0 or t ~= t then return end
+    n._deadline = core._monotonic() + t
+    n._timer = core.timer(math.min(2147483647, math.max(1, math.floor(t * 1000))), function()
+        n._timer = nil
+        if n.alive then n:dismiss("expired") end
+    end)
 end
 
 -- n:dismiss(reason): the one way a notification ends. It leaves the visible
@@ -95,6 +89,7 @@ function notification.methods:dismiss(reason)
 	end
 	reason = reason or "user"
 	self.alive = false
+    cancel(self)
 
 	local i = index_of(active, self)
 	if i ~= nil then
@@ -117,6 +112,7 @@ end
 -- closes, which is what every notification daemon does and no protocol demands:
 -- policy, and replaceable by writing your own display.
 function notification.methods:invoke(key)
+    if not self.alive then return end
 	if self.id ~= nil then
 		core.notify_action(self.id, key)
 	end
@@ -176,15 +172,20 @@ function M.notify(props)
 	-- exactly this), and one that names nothing raises a new one. The properties
 	-- are live, so writing them IS the update; there is nothing else to do.
 	if props.id ~= nil then
-		for _, n in ipairs(active) do
+		for _, n in ipairs(M.retained()) do
 			if n.id == props.id then
 				for k, v in pairs(props) do
 					if k ~= "id" then
 						n[k] = v
 					end
 				end
-				arm(n)
-				dirty(n)
+                if props._wire then
+                    n.icon, n.value = props.icon, props.value
+                    n.urgency = props.urgency or "normal"
+                    n.timeout = props.timeout or state.theme.notification_timeout[n.urgency]
+                end
+                arm(n)
+                dirty(n)
 				return n
 			end
 		end
@@ -215,6 +216,7 @@ function M.notify(props)
 	-- draws what you wrote.
 	n:emit("added")
 
+	if not n.alive then return n end
 	table.insert(suspended and pending or active, n)
 	if not suspended then
 		arm(n)
@@ -224,12 +226,47 @@ function M.notify(props)
 end
 
 -- Any live property redraws the screen it is on. The whole update path.
-for _, prop in ipairs({ "title", "message", "urgency", "icon", "actions" }) do
+for _, prop in ipairs({ "title", "message", "urgency", "icon", "actions", "value", "screen" }) do
 	notification.on("property::" .. prop, dirty)
 end
 -- Re-arming on a timeout write is what lets a rule say n.timeout = 1.
-notification.on("property::timeout", arm)
-notification.on("property::urgency", arm)
+notification.on("property::timeout", function(n) arm(n) end)
+notification.on("property::urgency", function(n) arm(n) end)
+
+function M.retained()
+    local out = {}
+    for _, n in ipairs(active) do out[#out+1] = n end
+    for _, n in ipairs(pending) do out[#out+1] = n end
+    return out
+end
+
+-- Config timers are reset by the host; service deadlines survive that reset.
+function M.reload()
+    for _, n in ipairs(M.retained()) do
+        local deadline = n._deadline
+        n._timer = nil
+        n._bus:reset()
+        if deadline then arm(n, math.max(.001, deadline - core._monotonic())) end
+    end
+end
+
+function M.on_event(ev)
+    if ev.name == "close" then
+        for _, n in ipairs(M.retained()) do
+            if n.id == ev.id then return n:dismiss("closed") end
+        end
+        return
+    end
+    local hints = ev.hints or {}
+    local icon = ev.image or hints["image-path"] or hints.image_path
+    if icon == nil and ev.app_icon and ev.app_icon ~= "" then icon = ev.app_icon end
+    M.notify {
+        _wire = true, id = ev.id, title = ev.summary, message = ev.body,
+        app_name = ev.app_name, urgency = ev.urgency,
+        timeout = ev.expire_timeout >= 0 and ev.expire_timeout / 1000 or nil,
+        icon = icon, actions = ev.actions, value = hints.value, hints = hints,
+    }
+end
 
 -- --------------------------------------------------------------------------
 -- The default display. Public ui API only: float, band, text, image, on_press.

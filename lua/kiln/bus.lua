@@ -45,6 +45,7 @@ end
 -- activate default), and truncating back to a boot-time length cannot put it
 -- back. Copies both ways, so neither side aliases the live lists.
 function Bus:mark()
+	if self.marked then return end
 	local marked = {}
 	for name, list in pairs(self.listeners) do
 		marked[name] = { unpack(list) }
@@ -53,11 +54,9 @@ function Bus:mark()
 end
 
 function Bus:reset()
-	if self.marked == nil then
-		return
-	end
+	self.generation = (self.generation or 0) + 1
 	local listeners = {}
-	for name, list in pairs(self.marked) do
+	for name, list in pairs(self.marked or {}) do
 		listeners[name] = { unpack(list) }
 	end
 	self.listeners = listeners
@@ -71,10 +70,12 @@ function Bus:emit(name, ...)
 	-- Snapshot so listeners that subscribe or unsubscribe mid-emit do not
 	-- skew the iteration.
 	local snapshot = { unpack(list) }
+	local generation = self.generation
 	for _, fn in ipairs(snapshot) do
+		if self.generation ~= generation then break end
 		local ok, err = pcall(fn, ...)
 		if not ok then
-			Bus.on_error(name, err)
+			pcall(Bus.on_error, name, err)
 		end
 	end
 end

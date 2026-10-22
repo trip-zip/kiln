@@ -22,13 +22,13 @@ PATTERN='require\("[^"]*"\)|\b(core|state|client|screen|tag|layer|drag|notificat
 # The blessed surface. The test each entry passes: a config reaches the same
 # name with the same spelling.
 #   - the public modules the widgets compose with
-#   - core.box / core.dirty / core.timer / core.tray_activate /
+#   - core.box / core.dirty / core.timer / core.timer_cancel /
 #     core.input.set_cursor, documented core API
 #   - state.theme (the same table kiln.theme names), any depth into it
 #   - the client global, a documented public global
 #   - kiln.widgets, the module's own public name (it appears in diagnostics
 #     as a string, which the scan cannot tell from code and need not)
-ALLOW=':(require\("kiln\.(ui|state|grab|icon|layout|systray)"\)|core\.(box|dirty|timer|tray_activate|input\.set_cursor)|state\.theme(\.[a-zA-Z_.]+)?|client\.[a-zA-Z_.]+|kiln\.widgets(\.[a-zA-Z_.]+)?)$'
+ALLOW=':(require\("kiln\.(ui|state|grab|icon|layout|systray)"\)|core\.(box|dirty|timer|timer_cancel|tray_activate|input\.set_cursor)|state\.theme(\.[a-zA-Z_.]+)?|screen\.all|client\.[a-zA-Z_.]+|kiln\.widgets(\.[a-zA-Z_.]+)?)$'
 
 if [ "$#" -gt 0 ]; then
 	files="$*"

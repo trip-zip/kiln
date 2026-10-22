@@ -1,0 +1,87 @@
+package compositor
+
+import "base:runtime"
+import "core:fmt"
+import "core:strings"
+import "../keymap"
+import cfg "../input_config"
+import wl "../wayland"
+import wlr "../wlroots"
+
+Pointer :: struct { server: ^Server, device: ^wlr.wlr_input_device, id: u64, destroy: wl.Listener }
+pointer_destroy :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+	context = runtime.default_context()
+	p:=wl.owner(listener,Pointer,"destroy")
+	wl.unlisten(listener)
+	for other,i in p.server.pointers { if other==p { ordered_remove(&p.server.pointers,i);break } }
+	free(p)
+}
+runtime_keymap :: proc(data: rawptr, names: keymap.Names) {
+	km:=keymap.create(names)
+	if km==nil { fmt.eprintln("set_keymap: xkb rejected the rule names");return }
+	defer keymap.destroy(km)
+	for kb in (^Server)(data).keyboards {
+		if !wlr.wlr_keyboard_set_keymap(kb.handle,km) { fmt.eprintln("set_keymap: keyboard rejected map") }
+	}
+}
+runtime_repeat :: proc(data: rawptr, rate, delay: i32) {
+	for kb in (^Server)(data).keyboards { wlr.wlr_keyboard_set_repeat_info(kb.handle,rate,delay) }
+}
+runtime_numlock :: proc(data: rawptr, on: bool) {
+	for kb in (^Server)(data).keyboards {
+		m:=kb.handle.modifiers
+		locked:=keymap.numlock_mask(kb.handle.xkb_state,m.locked,on)
+		wlr.wlr_keyboard_notify_modifiers(kb.handle,m.depressed,m.latched,locked,m.group)
+	}
+}
+runtime_pointer :: proc(data: rawptr, p: cfg.Pointer) {
+	for pointer in (^Server)(data).pointers { cfg.apply(pointer.device,p) }
+}
+runtime_cursor :: proc(data: rawptr, name: cstring) {
+	s:=(^Server)(data)
+	copy:=strings.clone_to_cstring(string(name))
+    if s.cursor_name!=nil { delete(s.cursor_name,s.cursor_name_allocator) }
+    s.cursor_name=copy;s.cursor_name_allocator=context.allocator;s.cursor_named=true
+    wlr.wlr_cursor_set_xcursor(s.cursor,s.cursor_manager,copy)
+    cursor_density(s)
+}
+cursor_theme_ready :: proc(manager: ^wlr.wlr_xcursor_manager, scale: f32) -> bool {
+	return wlr.wlr_xcursor_manager_load(manager,scale) && wlr.wlr_xcursor_manager_get_xcursor(manager,"default",scale)!=nil
+}
+runtime_cursor_theme :: proc(data: rawptr, name: cstring, size: u32) {
+	s:=(^Server)(data)
+	next:=wlr.wlr_xcursor_manager_create(name,size)
+	if next==nil { return }
+	if !cursor_theme_ready(next,1) { wlr.wlr_xcursor_manager_destroy(next);return }
+	for output in s.outputs {
+		if !cursor_theme_ready(next,output.handle.scale) { wlr.wlr_xcursor_manager_destroy(next);return }
+	}
+	old:=s.cursor_manager
+	s.cursor_manager=next
+	if s.cursor_named { runtime_cursor(s,s.cursor_name) }
+	wlr.wlr_xcursor_manager_destroy(old)
+}
+
+map_pointers :: proc(s: ^Server) {
+    for p in s.pointers {
+        handle:=wlr.wlr_pointer_from_input_device(p.device)
+        if handle.output_name==nil { continue }
+        for o in s.outputs {
+            if string(o.handle.name)==string(handle.output_name) {
+                wlr.wlr_cursor_map_input_to_output(s.cursor,p.device,o.handle)
+                break
+            }
+        }
+    }
+}
+
+cursor_density :: proc(s: ^Server) {
+    if !s.cursor_named || s.cursor_manager==nil { return }
+    for o in s.outputs {
+        cursor:=wlr.wlr_xcursor_manager_get_xcursor(s.cursor_manager,s.cursor_name,o.handle.scale)
+        if cursor!=nil && cursor.image_count>0 {
+            frame:=cursor.images[0]
+            fmt.printf("Cursor raster %s: %s scale %.3f device %dx%d\n",o.handle.name,s.cursor_name,o.handle.scale,frame.width,frame.height)
+        }
+    }
+}
