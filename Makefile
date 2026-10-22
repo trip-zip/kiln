@@ -38,8 +38,9 @@ $(CLAY): clay/clay.h
 	gcc -x c -DCLAY_IMPLEMENTATION -fPIC -O2 -c clay/clay.h -o clay/linux/clay.o
 	ar rcs $@ clay/linux/clay.o
 
+# A private socket, so a desktop already running Kiln keeps its own.
 run: all
-	dbus-run-session -- ./build/kiln
+	KILN_SOCK=$$(mktemp -u /tmp/kiln-run.XXXXXX) dbus-run-session -- ./build/kiln
 
 check: $(CLAY)
 	$(ODIN) check . -vet

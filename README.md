@@ -1,195 +1,48 @@
 # Kiln
 
-Kiln is a Lua-configurable Wayland desktop built around one Clay layout tree
-per output. Windows, bars, widgets, menus and notifications share that tree.
-Lua declares it when something changes; Clay solves the layout; an Odin
-renderer reconciles the result into wlroots' retained scene.
+A Wayland compositor in Odin, configured in Lua. Each output is one Clay
+layout tree: windows, bars, widgets, menus and notifications all live in it.
+Lua declares the tree when something changes, Clay solves it, and the
+renderer reconciles the result into the scene.
 
-Kiln is developed at [trip-zip/kiln](https://github.com/trip-zip/kiln). The
-maintainer uses it as a real desktop. The Lua API remains experimental.
+Documentation, including the Lua API, is at [somewm.org/kiln](https://somewm.org/kiln/).
 
-## Desktop controls
+## Build
 
-Open two terminals, switch tags, cycle layouts, then open the inspector to see
-the same tree that places the clients and bar. The stock config uses Super as
-`mod`; Super+s shows the live binding sheet.
-
-| Control | Action |
-| --- | --- |
-| Super+Return | Terminal, `$TERMINAL` or foot |
-| Super+p / Super+r / Super+x | Application launcher / command prompt / Lua prompt |
-| Super+1 through 5 | Select dev, web, chat, files or media |
-| Super+Shift+number | Move the focused client to that tag |
-| Super+j / k; Super+Tab | Cycle focus; return to previous client |
-| Super+Space / Super+Shift+Space | Next / previous layout |
-| Super+f / Super+m | Toggle fullscreen / maximised |
-| Super+n / Super+Ctrl+n | Minimise / restore |
-| Super+Ctrl+Space | Toggle floating |
-| Super+left / right mouse drag | Move / resize |
-| Super+w | Main menu, including theme selection |
-| Super+Shift+i | Actual Clay inspector; select rows and scroll either pane |
-| Super+Ctrl+r | Reload Lua config while keeping clients |
-| Super+Shift+c / Super+Shift+q | Close client / quit Kiln |
-| Super+Shift+Escape | Native lock |
-
-Tags, layouts, placement rules, titlebars, widgets and input bindings are Lua
-policy. The desktop includes notifications, StatusNotifier tray items, timers,
-polls, subprocess streams, native Wayland and XWayland clients, layer-shell,
-clipboard/primary selection, screenshots and session locking. Audio,
-brightness and screenshot shortcuts call external tools (`wpctl`,
-`brightnessctl`, `grim`, `slurp`). Native locking uses PAM.
-
-## Build and launch
-
-```sh
-git clone https://github.com/trip-zip/kiln.git
-cd kiln
-```
-
-The verified compiler is Odin `dev-2026-10-nightly:779c8c0`. Build tools are
-GNU make, gcc and ar. The current binding ABI targets wlroots 0.20.2.
-Linked system libraries include wlroots-0.20, wayland-server, libinput,
-xkbcommon, LuaJIT 2.1, cairo, pango/pangocairo, gdk-pixbuf/GLib/GObject,
-libsystemd, PAM, xcb, xcb-ewmh and xcb-icccm. wlroots also brings its graphics
-and device dependencies. XWayland is needed for X11 applications. The stock
-desktop uses `rsvg-convert`, fonts and a terminal such as foot.
-
-There is no bundled wlroots fallback or Meson feature switch here. This is
-Odin compositor code over C dependencies, not a pure-Odin graphics stack.
-
-Clay is vendored in `clay/`: the upstream single header, its official Odin
-binding and licence, unmodified. The first build compiles the header into
-`clay/linux/clay.a` next to the binding, the way Odin's own `vendor`
-packages carry their C archives.
+Needs Odin (nightly), GNU make, gcc and ar, plus wlroots 0.20, LuaJIT 2.1,
+cairo, pango, gdk-pixbuf, libsystemd, PAM and xcb. Clay is vendored.
 
 ```sh
 make
 ```
 
-This runs `odin build .` and produces `build/kiln` and `build/kiln-client`.
-
-Inside an existing desktop, start a nested session with its own bus and IPC:
+Try it as a window inside your current desktop:
 
 ```sh
-kiln_demo=$(mktemp -d /tmp/kiln-demo.XXXXXX)
-KILN_SOCK="$kiln_demo/eval.sock" KILN_RC="$PWD/kilnrc.lua" \
-  dbus-run-session -- ./build/kiln -s foot
+make run
 ```
 
-The window shows the stock config. Super+Return opens another terminal;
-Super+Space changes layout; Super+Shift+q exits. Host shortcuts can intercept
-Super in a nested window. `make run` builds and starts Kiln under a session bus
-using your normal config and default IPC path. The command above gives a nested demo its own
-socket. Logs go to the terminal; `run-tty` records a private log.
-
-## Install and configure
-
-Build as your normal user, then install:
+## Install
 
 ```sh
-make && sudo make install
+sudo make install
 ```
 
-From a free TTY after ending the previous desktop, log in as your normal user
-and run:
+Then start `kiln` from a TTY. The default config is `kilnrc.lua`; copy it to
+`~/.config/kiln/rc.lua` to make it yours. `make uninstall` removes everything
+`make install` put down. `prefix` and `DESTDIR` work as usual.
+
+## Test
 
 ```sh
-kiln
+make check        # vet every package
+make test         # unit tests, then drive the built compositor headless
+make test-nested  # the same, visible as a window in your desktop
 ```
 
-Kiln selects DRM/libinput, creates a new Wayland socket and loads your config.
-It uses the login's D-Bus user session. Super+Return opens a terminal;
-Super+Shift+q quits. No working-directory change, launcher script or backend
-environment variables are needed. On systems without a login-provided bus,
-use `dbus-run-session -- kiln`.
-
-Installation copies the build with `install(1)`. Reinstalling replaces the
-executable without stopping a running Kiln; the next launch uses the new build.
-Installing does not edit your config.
-
-For a user prefix, build and install with the same paths:
-
-```sh
-make prefix="$HOME/.local"
-make install prefix="$HOME/.local"
-```
-
-This installs `kiln`, `kiln-client`, bash/zsh/fish completions, a
-`kiln.desktop` session entry named **Kiln**, and the Lua runtime/default
-config under `<prefix>/share/kiln`. Display managers usually discover
-system session directories; a user prefix is not a promise of login-menu
-visibility. `make install` defaults to `/usr/local`; use appropriate write
-permissions there. `DESTDIR` stages files but does not change compiled runtime
-paths. To remove this installation use the same prefix with `make uninstall`.
-
-`./run-tty` remains an optional development launcher with a private bus, IPC
-socket and log directory. See [TESTING.md](TESTING.md#physical-sessions) for
-hardware testing and recovery.
-
-Keep your existing `~/.config/kiln/rc.lua` and `theme`. For a new config only,
-copy `kilnrc.lua` there without overwriting an existing file. Config search is:
-`KILN_RC`, then `$XDG_CONFIG_HOME/kiln/rc.lua` (or `~/.config/kiln/rc.lua`), then
-compiled `<datadir>/kiln/rc.lua`, then `kilnrc.lua` in the working directory.
-
-The entry point is `local kiln = require("kiln")`. Use `kiln.ui` to declare
-nodes, `kiln.key` and `kiln.rule` for controls and rules, and the `client`,
-`screen`, `tag`, `layer`, `drag` and `notification` globals for desktop objects.
-`core` is the lower-level verb API. In the Lua prompt, try `6*7`; over IPC,
-`kiln` must be required because a config's local is not a global:
-
-```sh
-./build/kiln-client -s "$kiln_demo/eval.sock" eval 'return #client.all()'
-./build/kiln-client -s "$kiln_demo/eval.sock" eval 'return require("kiln").modkey'
-```
-
-Use these from another terminal while that demo is running. An explicit socket
-prevents contacting a different session. The Lua API and config directory retain
-the Kiln name.
-
-## Known limitations
-
-The exact shared Clay clipping failures remain: a visible child in a
-horizontal-only clip is missed by hit testing, and a nested outer-clip hit
-incorrectly succeeds. Tests pin these outcomes in
-[clay-contract-baseline.json](scripts/clay-contract-baseline.json) and
-[clay-live-baseline.json](scripts/clay-live-baseline.json). Inspector palette styling is
-deferred; a rejected raster can advance its private selection and a rejected
-toggle needs retry. Private Clay state is not patched or rolled back.
-
-Three XWayland limits are distinct: incoming X11-to-Wayland drag-and-drop is
-unsupported; a slow incoming INCR transfer can truncate on EAGAIN; owner death
-during incoming INCR can leave no EOF and retain one pipe FD. Provider guards
-are wlroots 0.20.2 and XWayland 24.1.14. Ordinary supported-path soaks do not
-count these as passing transfers.
-
-Physical hotplug, DPMS, VRR/gamma, external locking and systematic mixed-scale
-testing remain pending. Desktop/input, native/X clients, inspector, reload,
-VT return and native lock/unlock have operator-reported physical success.
-
-The [Kiln documentation](https://somewm.org/kiln/) covers workflows and the
-Lua API.
-
-## Tests
-
-```sh
-make check
-make test
-make test-nested
-```
-
-`make check` is `odin check -vet` over every package. `make test` is
-`odin test -all-packages` for the unit tests, then the `tests` package, which
-boots `build/kiln` headless and drives it over IPC. `make test-nested` runs
-those same tests as a window inside your desktop with the real renderer.
-[TESTING.md](TESTING.md) has the details and the physical-seat procedure.
-
-The retired C implementation is preserved at `c-baseline-82ad185` for
-comparison.
+See [TESTING.md](TESTING.md).
 
 ## Licence
 
-MIT; see [LICENSE](LICENSE). Releases through `v0.1.0` retain their earlier
-GPLv3 grant. Clay is zlib licensed; the adapted LuaJIT binding preserves its
-Odin distribution notice. Copies are in [licenses](licenses/); installation
-includes them under `<datadir>/licenses/kiln`. Linked dependencies retain their
-own licences. Kiln shares a maintainer with [SomeWM](https://github.com/trip-zip/somewm).
+MIT, see [LICENSE](LICENSE). Clay is zlib licensed (`clay/LICENSE`); the
+LuaJIT binding keeps its notice in `luajit/LICENSE`.
