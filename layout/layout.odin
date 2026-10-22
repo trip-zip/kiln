@@ -5,7 +5,7 @@ import "core:fmt"
 import "core:strings"
 import paint "../paint"
 import images "../images"
-import clay "deps:clay"
+import clay "../clay"
 
 Box :: struct { x, y, width, height: f32 }
 Client :: struct { id: u32 }

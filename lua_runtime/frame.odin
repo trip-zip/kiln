@@ -9,7 +9,7 @@ import lua "../luajit"
 import layout "../layout"
 import paint "../paint"
 import images "../images"
-import clay "deps:clay"
+import clay "../clay"
 
 set_lock_handler :: proc "c" (L: ^lua.State) -> c.int {
     context=runtime.default_context()

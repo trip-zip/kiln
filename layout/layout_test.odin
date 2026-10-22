@@ -3,7 +3,7 @@ package layout
 import "core:testing"
 import "core:strings"
 import paint "../paint"
-import clay "deps:clay"
+import clay "../clay"
 
 @(test)
 negative_float_uses_current_parent_geometry :: proc(t: ^testing.T) {

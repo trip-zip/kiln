@@ -1,6 +1,6 @@
 package layout
 
-import clay "deps:clay"
+import clay "../clay"
 
 #assert(size_of(clay.Arena) == 24)
 #assert(offset_of(clay.Arena, nextAllocation) == 0)

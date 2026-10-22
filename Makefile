@@ -1,146 +1,83 @@
-# Odin build wrapper.
+# make            build/kiln and build/kiln-client
+# make run        build and run under a session bus
+# make check      typecheck and vet
+# make test       run every package's tests, then drive build/kiln headless
+# make test-nested  the same driven tests inside the desktop you run this from
+# make install    copy the build to $(prefix), default /usr/local
+# make uninstall  remove what install copied
 #
-#   make            # build build/kiln
-#   make run        # build and run
-#   make check      # typecheck and vet every package, no binary
-#   make test       # run every package's tests
-#   make clean      # remove build/
-#
-# Odin does not create the -out directory, so every target that links makes
-# build/ first. --export-dynamic lets LuaJIT's ffi.C resolve procs the binary
-# exports.
+# odin does not create the -out directory, and --export-dynamic lets LuaJIT's
+# ffi.C resolve procs the binary exports.
 
 ODIN ?= odin
 prefix ?= /usr/local
 bindir ?= $(prefix)/bin
 datadir ?= $(prefix)/share
 DESTDIR ?=
-RUNTIME_FLAGS = -define:KILN_DATADIR="$(datadir)/kiln"
 
-CLAY_ROOT ?= $(HOME)/tools/clay
-ODINFLAGS := -collection:deps=build
-LDFLAGS := -extra-linker-flags:"-Wl,--export-dynamic"
+DEFINES = -define:KILN_DATADIR="$(datadir)/kiln"
+LDFLAGS = -extra-linker-flags:"-Wl,--export-dynamic"
+CLAY = clay/linux/clay.a
 
-.PHONY: all run check test clean compat-test clay-dependency
+.PHONY: all run check test test-nested install uninstall clean
 
-all: client build/clay/linux/clay.a
+all: build/kiln build/kiln-client
+
+build/kiln: $(CLAY) $(shell find . -name '*.odin' -not -path './build/*')
 	@mkdir -p build
-	$(ODIN) build . $(ODINFLAGS) $(RUNTIME_FLAGS) -out:build/kiln $(LDFLAGS)
+	$(ODIN) build . $(DEFINES) -out:$@ $(LDFLAGS)
+
+build/kiln-client: $(wildcard command_client/*.odin)
+	@mkdir -p build
+	$(ODIN) build command_client -out:$@
+
+# Clay is a single-header C library; its archive is built once from the
+# vendored header, next to the binding, the way Odin's vendor packages do.
+$(CLAY): clay/clay.h
+	@mkdir -p clay/linux
+	gcc -x c -DCLAY_IMPLEMENTATION -fPIC -O2 -c clay/clay.h -o clay/linux/clay.o
+	ar rcs $@ clay/linux/clay.o
 
 run: all
 	dbus-run-session -- ./build/kiln
 
-check: build/clay/linux/clay.a
+check: $(CLAY)
+	$(ODIN) check . -vet
+	$(ODIN) check . -vet -define:KILN_OUTPUT_FIXTURE=true -define:KILN_AUTH_FIXTURE=true
 	$(ODIN) check command_client -vet
+	$(ODIN) check tests -vet -no-entry-point
 	sh scripts/widget-lint.sh
-	python3 scripts/verify-clay-clips.py
-	$(ODIN) check build/clay -vet -no-entry-point
-	$(ODIN) check pam_raw -vet -no-entry-point
-	$(ODIN) check pam -vet -no-entry-point
-	$(ODIN) check authentication -vet -no-entry-point
-	$(ODIN) check authentication -define:KILN_AUTH_FIXTURE=true -vet -no-entry-point
-	$(ODIN) check sd_bus -vet -no-entry-point
-	$(ODIN) check dbus -vet -no-entry-point
-	$(ODIN) check desktop_bus $(ODINFLAGS) -vet -no-entry-point
-	$(ODIN) check cairo $(ODINFLAGS) -vet -no-entry-point
-	$(ODIN) check pango $(ODINFLAGS) -vet -no-entry-point
-	$(ODIN) check gdk_pixbuf $(ODINFLAGS) -vet -no-entry-point
-	$(ODIN) check readback $(ODINFLAGS) -vet -no-entry-point
-	$(ODIN) check images $(ODINFLAGS) -vet -no-entry-point
-	$(ODIN) check paint $(ODINFLAGS) -vet -no-entry-point
-	$(ODIN) check scene_paint $(ODINFLAGS) -vet -no-entry-point
-	$(ODIN) check layout $(ODINFLAGS) -vet -no-entry-point
-	$(ODIN) check wlroots -vet -no-entry-point
-	$(ODIN) check xcb_raw -vet -no-entry-point
-	$(ODIN) check xcb_ewmh_raw -vet -no-entry-point
-	$(ODIN) check xcb_ewmh -vet -no-entry-point
-	$(ODIN) check xcb_icccm_raw -vet -no-entry-point
-	$(ODIN) check xcb_icccm -vet -no-entry-point
-	$(ODIN) check xcb -vet -no-entry-point
-	$(ODIN) check xkbcommon -vet -no-entry-point
-	$(ODIN) check libinput -vet -no-entry-point
-	$(ODIN) check input_config -vet -no-entry-point
-	$(ODIN) check keymap -vet -no-entry-point
-	$(ODIN) check compositor $(ODINFLAGS) -vet -no-entry-point
-	$(ODIN) check compositor $(ODINFLAGS) -define:KILN_OUTPUT_FIXTURE=true -vet -no-entry-point
-	$(ODIN) check wayland_server -vet -no-entry-point
-	$(ODIN) check wayland -vet -no-entry-point
-	$(ODIN) check . $(ODINFLAGS) -vet
-	$(ODIN) check luajit -vet -no-entry-point
-	$(ODIN) check lua_runtime $(ODINFLAGS) -vet -no-entry-point
-	$(ODIN) check ipc -vet -no-entry-point
 
-# Clay has a process-global current context, so its tests run serially.
-test: build/clay/linux/clay.a
-	$(ODIN) test command_client -out:build/command-client-test
-	python3 scripts/build-clay.py --root "$(CLAY_ROOT)" --test
-	python3 scripts/verify-clay-clips.py
-	$(ODIN) test build/clay -out:build/clay-test $(LDFLAGS)
-	$(ODIN) test desktop_bus $(ODINFLAGS) -out:build/desktop-bus-test $(LDFLAGS)
-	$(ODIN) test pam_raw -out:build/pam-raw-test
-	$(ODIN) test pam -define:ODIN_TEST_THREADS=1 -out:build/pam-test
-	$(ODIN) test authentication -out:build/authentication-test
-	$(ODIN) test sd_bus -out:build/sd-bus-test
-	dbus-run-session -- $(ODIN) test dbus -define:ODIN_TEST_THREADS=1 -out:build/dbus-test
-	$(ODIN) test cairo $(ODINFLAGS) -define:ODIN_TEST_THREADS=1 -out:build/cairo-test $(LDFLAGS)
-	$(ODIN) test pango $(ODINFLAGS) -define:ODIN_TEST_THREADS=1 -out:build/pango-test $(LDFLAGS)
-	$(ODIN) test gdk_pixbuf $(ODINFLAGS) -out:build/gdk-pixbuf-test $(LDFLAGS)
-	$(ODIN) test readback $(ODINFLAGS) -out:build/readback-test
-	$(ODIN) test images $(ODINFLAGS) -define:ODIN_TEST_THREADS=1 -out:build/images-test $(LDFLAGS)
-	$(ODIN) test paint $(ODINFLAGS) -define:ODIN_TEST_THREADS=1 -out:build/paint-test $(LDFLAGS)
-	$(ODIN) test scene_paint $(ODINFLAGS) -define:ODIN_TEST_THREADS=1 -out:build/scene_paint-test $(LDFLAGS)
-	$(ODIN) test layout $(ODINFLAGS) -define:ODIN_TEST_THREADS=1 -out:build/layout-test $(LDFLAGS)
-	@mkdir -p build
-	$(ODIN) test wlroots -out:build/wlroots-test $(LDFLAGS)
-	$(ODIN) test xcb_raw -out:build/xcb-raw-test $(LDFLAGS)
-	$(ODIN) test xcb_ewmh_raw -out:build/xcb_ewmh_raw-test $(LDFLAGS)
-	$(ODIN) test xcb_ewmh -out:build/xcb_ewmh-test $(LDFLAGS)
-	$(ODIN) test xcb_icccm_raw -out:build/xcb_icccm_raw-test $(LDFLAGS)
-	$(ODIN) test xcb_icccm -out:build/xcb_icccm-test $(LDFLAGS)
-	$(ODIN) test xcb -out:build/xcb-test $(LDFLAGS)
-	$(ODIN) test xkbcommon -out:build/xkbcommon-test $(LDFLAGS)
-	$(ODIN) test libinput -out:build/libinput-test $(LDFLAGS)
-	$(ODIN) test input_config -out:build/input-config-test $(LDFLAGS)
-	$(ODIN) test keymap -out:build/keymap-test $(LDFLAGS)
-	$(ODIN) test compositor $(ODINFLAGS) -define:ODIN_TEST_THREADS=1 -out:build/compositor-test $(LDFLAGS)
-	$(ODIN) test wayland_server -out:build/wayland-server-test $(LDFLAGS)
-	$(ODIN) test wayland -out:build/wayland-test $(LDFLAGS)
-	$(ODIN) test luajit -out:build/luajit-test $(LDFLAGS)
-	$(ODIN) test lua_runtime $(ODINFLAGS) -define:ODIN_TEST_THREADS=1 -out:build/lua-runtime-test $(LDFLAGS)
-	$(ODIN) test ipc -out:build/ipc-test $(LDFLAGS)
+# Clay keeps a process-global context and the D-Bus tests share one bus, so
+# tests run on one thread.
+test: all
+	dbus-run-session -- $(ODIN) test . -all-packages -define:ODIN_TEST_THREADS=1 -out:build/kiln-test $(LDFLAGS)
+	$(ODIN) test command_client -out:build/kiln-client-test
+	$(ODIN) test tests -out:build/tests $(LDFLAGS)
 
-clean:
-	rm -rf build
+test-nested: all
+	KILN_TEST_BACKEND=nested $(ODIN) test tests -out:build/tests $(LDFLAGS)
 
-# The manifest checks root, commit and content even when source timestamps go backwards.
-clay-dependency:
-	python3 scripts/build-clay.py --root "$(CLAY_ROOT)"
-
-build/clay/linux/clay.a: clay-dependency
-
-compat-test: all
-	python3 scripts/compat-test.py --check-installed
-
-.PHONY: audit-soak
-audit-soak: all
-	python3 scripts/audit_soak.py --cycles 10 --seconds 600
-
-.PHONY: auth-fixture
-auth-fixture: build/clay/linux/clay.a
-	$(ODIN) build . $(ODINFLAGS) -define:KILN_AUTH_FIXTURE=true -define:KILN_OUTPUT_FIXTURE=true -out:build/kiln-auth-fixture $(LDFLAGS)
-
-.PHONY: client
-client:
-	@mkdir -p build
-	$(ODIN) build command_client -out:build/kiln-client
-
-.PHONY: install uninstall
 install: all
-	python3 scripts/install.py install --bindir "$(bindir)" --datadir "$(datadir)" --destdir "$(DESTDIR)"
+	install -Dm755 build/kiln $(DESTDIR)$(bindir)/kiln
+	install -Dm755 build/kiln-client $(DESTDIR)$(bindir)/kiln-client
+	install -Dm644 kilnrc.lua $(DESTDIR)$(datadir)/kiln/rc.lua
+	for f in $$(find lua -name '*.lua'); do install -Dm644 $$f $(DESTDIR)$(datadir)/kiln/$$f; done
+	install -Dm644 kiln.desktop $(DESTDIR)$(datadir)/wayland-sessions/kiln.desktop
+	install -Dm644 completions/kiln-client.bash $(DESTDIR)$(datadir)/bash-completion/completions/kiln-client
+	install -Dm644 completions/_kiln-client $(DESTDIR)$(datadir)/zsh/site-functions/_kiln-client
+	install -Dm644 completions/kiln-client.fish $(DESTDIR)$(datadir)/fish/vendor_completions.d/kiln-client.fish
+	install -Dm644 LICENSE $(DESTDIR)$(datadir)/licenses/kiln/LICENSE
+	install -Dm644 clay/LICENSE $(DESTDIR)$(datadir)/licenses/kiln/Clay.txt
+	install -Dm644 luajit/LICENSE $(DESTDIR)$(datadir)/licenses/kiln/LuaJIT-binding.txt
 
 uninstall:
-	python3 scripts/install.py uninstall --bindir "$(bindir)" --datadir "$(datadir)" --destdir "$(DESTDIR)"
+	rm -f $(DESTDIR)$(bindir)/kiln $(DESTDIR)$(bindir)/kiln-client
+	rm -rf $(DESTDIR)$(datadir)/kiln $(DESTDIR)$(datadir)/licenses/kiln
+	rm -f $(DESTDIR)$(datadir)/wayland-sessions/kiln.desktop
+	rm -f $(DESTDIR)$(datadir)/bash-completion/completions/kiln-client
+	rm -f $(DESTDIR)$(datadir)/zsh/site-functions/_kiln-client
+	rm -f $(DESTDIR)$(datadir)/fish/vendor_completions.d/kiln-client.fish
 
-.PHONY: c-baseline
-c-baseline:
-	python3 scripts/c_baseline.py --build
+clean:
+	rm -rf build clay/linux

@@ -1,9 +1,9 @@
 package layout
 
-import clay "deps:clay"
+import clay "../clay"
 
 // This variable is declared in the public header but omitted by its binding.
-foreign import debug_globals "../build/clay/linux/clay.a"
+foreign import debug_globals "../clay/linux/clay.a"
 foreign debug_globals {
     @(link_name="Clay__debugViewWidth")
     inspector_width:u32

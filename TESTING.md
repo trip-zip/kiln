@@ -1,98 +1,38 @@
 # Testing Kiln
 
-Run from a full clone after building the pinned Clay dependency. All runtime
-checks use owned private processes, sockets and test data. Never select a live
-socket or kill a compositor by name.
-
 ```sh
 make check
 make test
-make compat-test
 ```
 
-`make check` vets packages, checks widget API use and asserts the exact known
-Clay clipping outcomes. `make test` covers package ownership, ABI and recovery,
-including the upstream/C Clay contract fingerprint. `make compat-test` exercises
-native/X11 clients, rendering, input, services, CLI/completions, installation,
-reload/recovery and authentication fixtures. It includes an isolated C comparison
-and builds private fixture binaries. It can take around twenty minutes.
+`make check` vets every package and checks widget API use. `make test` runs
+every package's unit tests, then the `tests` package, which boots the built
+`build/kiln` the way a user does and drives it over its IPC socket with Lua.
+Every driven test runs in a private environment: its own runtime directory,
+config, home and socket, with no bus. Nothing it does reaches your session.
 
-The tested workstation supplies Python 3 with Pillow and PyGObject (Gio/GLib),
-OpenBSD netcat (`nc -U -N`), gcc, make, ar, pkg-config, Meson/Ninja, Xvfb,
-XWayland, xterm, xprop, xwininfo, xdotool, wev, foot, grim, rsvg-convert,
-ImageMagick, desktop-file-validate, D-Bus tools, bash and zsh. Fish adds actual
-fish completion coverage. Missing required providers fail their checks; read
-explicit NOT RUN or UNAVAILABLE records rather than counting skipped checks as
-passes. System libraries and fonts must match the comparison receipts when
-reproducing exact pixels or provider-specific defects.
+## Backends
 
-The full application group runs zenity (GTK), VLC (Qt), Firefox and FreeCol
-(Java). Its package-version receipts currently use Arch's `pacman`; the full
-suite has been verified on that workstation, not every distribution. Prepare
-the hash-pinned Java/FreeCol packages in the private cache when absent:
+The driven tests draw with the headless backend by default. They render into
+memory, and the screenshot verb reads the frame back, so pixel assertions
+run without a display.
 
 ```sh
-python3 scripts/prepare-xwayland-apps.py
+make test-nested
 ```
 
-That helper downloads and extracts two pinned Arch packages using `bsdtar`,
-without host installation. `KILN_APP_ROOT` selects an alternate extracted root;
-the default is `~/.cache/kiln-session16-apps/root`. Preserve its `packages.json`
-and package archives with the test receipts. It does not install zenity, VLC
-or Firefox. `KILN_APP_CASES` can select a subset for focused debugging, but a
-subset is not a full compatibility pass.
+The same tests with the nested backend: Kiln opens as a window inside the
+desktop you run the command from and draws with the real renderer. The
+parent has to show that window. A tag or rule that hides it blocks the first
+frame and the harness says so. Running tests on a physical seat is the
+`run-tty` path below; point the harness at it with `KILN_SOCK` once the tests
+grow a mode for an already running compositor.
 
-## Final C comparison source
-
-`c-baseline-82ad185` identifies
-`82ad185fad98bcebf191df047494a9561ffb043b`, the retired C implementation.
-`scripts/c_baseline.py` extracts that exact commit from Git into the ignored
-`build/c-baseline` directory on first use. It does not consult `~/tools/kiln`
-or download another product. Do not edit the extracted fixture. It can be
-regenerated from history after cleaning the build directory.
-
-```sh
-make c-baseline
-python3 scripts/original_battery_checks.py quit bar widget popup launcher pipe poll
-python3 scripts/original_battery_checks.py quit bar widget popup launcher pipe poll \
-  --binary "$PWD/build/c-baseline/build/kiln" --implementation c
-```
-
-The baseline build uses its original Meson configuration and vendored Clay
-v0.14. Kiln itself uses unmodified upstream Clay `e6cc369` with its official
-Odin binding. Do not unify the dependencies or patch either to change the
-comparison result. `--original` remains available on comparison entry points
-when an explicit baseline source directory is useful.
-
-A shallow clone may lack the C commit. Fetch full history before tests:
-
-```sh
-git fetch --unshallow origin
-```
-
-That command is only for shallow clones. Source tarballs do not contain the
-history needed for C comparison tests; use a Git clone for those tests.
-
-## Focused checks
-
-```sh
-python3 scripts/verify-layout.py
-python3 scripts/verify-clay-clips.py
-python3 scripts/install_checks.py --config /path/to/reviewed/rc.lua \
-  --theme /path/to/reviewed/theme
-make audit-soak
-```
-
-The install check copies the selected config/theme into a disposable installed
-runtime and exercises daily actions with native input; it does not overwrite the
-originals. Review a custom config's external effects before passing it. The
-combined soak uses fixture authentication, never real credentials.
-
-Ideal-behaviour probes such as
-`python3 scripts/verify-clay-clips.py --strict` still fail on the documented
-shared defects. Normal gates assert their exact fingerprints, not a claim that
-those bugs are fixed. The expected observations are stored in
-`scripts/clay-contract-baseline.json` and `scripts/clay-live-baseline.json`.
+Writing a driven test: `boot` gives a session, `expect_eval` compares one
+reply, `expect_eventually` polls for facts that settle a frame later, and
+`quit` asserts a clean exit, no assertion in the log and no leaked socket.
+The harness touches only the process, the socket and the Lua API, so it
+does not care what sits under the compositor.
 
 ## Physical sessions
 

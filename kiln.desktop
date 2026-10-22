@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Kiln
+Comment=Lua-configured Wayland compositor
+Exec=kiln
+Type=Application

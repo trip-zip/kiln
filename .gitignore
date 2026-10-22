@@ -1,7 +1,5 @@
-/kiln
 /build/
-*.o
-/scripts/__pycache__/
+/clay/linux/
 /AUDIT-*
 /PARITY.md
 /EXPERIMENTS.md

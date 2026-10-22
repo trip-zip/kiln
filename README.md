@@ -47,7 +47,7 @@ cd kiln
 ```
 
 The verified compiler is Odin `dev-2026-10-nightly:779c8c0`. Build tools are
-GNU make, Python 3, gcc and ar. The current binding ABI targets wlroots 0.20.2.
+GNU make, gcc and ar. The current binding ABI targets wlroots 0.20.2.
 Linked system libraries include wlroots-0.20, wayland-server, libinput,
 xkbcommon, LuaJIT 2.1, cairo, pango/pangocairo, gdk-pixbuf/GLib/GObject,
 libsystemd, PAM, xcb, xcb-ewmh and xcb-icccm. wlroots also brings its graphics
@@ -57,24 +57,16 @@ desktop uses `rsvg-convert`, fonts and a terminal such as foot.
 There is no bundled wlroots fallback or Meson feature switch here. This is
 Odin compositor code over C dependencies, not a pure-Odin graphics stack.
 
-Keep an unmodified Clay checkout at the exact revision in
-[clay-dependency.json](clay-dependency.json), including its official Odin
-binding. If you do not already have that checkout:
-
-```sh
-git clone https://github.com/nicbarker/clay.git "$HOME/tools/clay"
-git -C "$HOME/tools/clay" checkout e6cc36941ab2af5d81107617039d6f527a1c660b
-```
-
-With that pinned checkout at `~/tools/clay`:
+Clay is vendored in `clay/`: the upstream single header, its official Odin
+binding and licence, unmodified. The first build compiles the header into
+`clay/linux/clay.a` next to the binding, the way Odin's own `vendor`
+packages carry their C archives.
 
 ```sh
 make
 ```
 
-For another location, use `make CLAY_ROOT=/absolute/path/to/clay`. The build
-verifies the revision and header/binding hashes before building `clay.a`.
-It produces `build/kiln` and `build/kiln-client`.
+This runs `odin build .` and produces `build/kiln` and `build/kiln-client`.
 
 Inside an existing desktop, start a nested session with its own bus and IPC:
 
@@ -90,18 +82,35 @@ Super in a nested window. `make run` builds and starts Kiln under a session bus
 using your normal config and default IPC path. The command above gives a nested demo its own
 socket. Logs go to the terminal; `run-tty` records a private log.
 
-From a free physical TTY, run `./run-tty`. It builds Kiln, loads your normal
-config, and opens foot using DRM/libinput with a private bus and IPC socket.
-Quit the previous desktop first. Logs and the compositor PID are saved in the
-directory recorded by `build/last-tty-trial`. Super+Shift+q quits. Keep a
-separate console or SSH connection available for hardware and lock testing;
-see [TESTING.md](TESTING.md#physical-sessions).
-
 ## Install and configure
 
-To install into a user prefix:
+Build as your normal user, then install:
 
 ```sh
+make && sudo make install
+```
+
+From a free TTY after ending the previous desktop, log in as your normal user
+and run:
+
+```sh
+kiln
+```
+
+Kiln selects DRM/libinput, creates a new Wayland socket and loads your config.
+It uses the login's D-Bus user session. Super+Return opens a terminal;
+Super+Shift+q quits. No working-directory change, launcher script or backend
+environment variables are needed. On systems without a login-provided bus,
+use `dbus-run-session -- kiln`.
+
+Installation copies the build with `install(1)`. Reinstalling replaces the
+executable without stopping a running Kiln; the next launch uses the new build.
+Installing does not edit your config.
+
+For a user prefix, build and install with the same paths:
+
+```sh
+make prefix="$HOME/.local"
 make install prefix="$HOME/.local"
 ```
 
@@ -111,8 +120,11 @@ config under `<prefix>/share/kiln`. Display managers usually discover
 system session directories; a user prefix is not a promise of login-menu
 visibility. `make install` defaults to `/usr/local`; use appropriate write
 permissions there. `DESTDIR` stages files but does not change compiled runtime
-paths. To remove this installation use the same prefix with `make uninstall`;
-its manifest limits removal to its own files.
+paths. To remove this installation use the same prefix with `make uninstall`.
+
+`./run-tty` remains an optional development launcher with a private bus, IPC
+socket and log directory. See [TESTING.md](TESTING.md#physical-sessions) for
+hardware testing and recovery.
 
 Keep your existing `~/.config/kiln/rc.lua` and `theme`. For a new config only,
 copy `kilnrc.lua` there without overwriting an existing file. Config search is:
@@ -157,23 +169,22 @@ VT return and native lock/unlock have operator-reported physical success.
 The [Kiln documentation](https://somewm.org/kiln/) covers workflows and the
 Lua API.
 
-## Tests and the C baseline
+## Tests
 
 ```sh
 make check
 make test
-make compat-test
+make test-nested
 ```
 
-Tests extract the final C baseline from this repository's preserved Git history
-into `build/c-baseline`; no separate C source checkout is required. Use a full
-clone, or fetch the baseline history if your clone is shallow. `make c-baseline`
-builds it for comparisons. `make compat-test` includes private compositors,
-installed-runtime and completion checks. It needs the fixture tools described
-in [TESTING.md](TESTING.md). `make audit-soak` runs the longer combined exercise.
-The C implementation is retired from active development and preserved at
-`c-baseline-82ad185`. Its exact source and recorded defect fingerprints remain
-the comparison oracle, not a second maintained product.
+`make check` is `odin check -vet` over every package. `make test` is
+`odin test -all-packages` for the unit tests, then the `tests` package, which
+boots `build/kiln` headless and drives it over IPC. `make test-nested` runs
+those same tests as a window inside your desktop with the real renderer.
+[TESTING.md](TESTING.md) has the details and the physical-seat procedure.
+
+The retired C implementation is preserved at `c-baseline-82ad185` for
+comparison.
 
 ## Licence
 

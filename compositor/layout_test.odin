@@ -1,7 +1,7 @@
 package compositor
 
 import "core:testing"
-import clay "deps:clay"
+import clay "../clay"
 import sp "../scene_paint"
 import layout "../layout"
 import vm "../lua_runtime"
@@ -23,7 +23,7 @@ reconcile_retains_and_removes_rectangles :: proc(t: ^testing.T) {
 	output.ui.fonts = &r.fonts
 	reply := vm.evaluate(&r, `package.path = "lua/?.lua;lua/?/init.lua;" .. package.path
 core.output.list = function() return {{name="TEST",width=1280,height=720}} end
-` + #load("../scripts/fixtures/strip.lua"))
+` + #load("fixtures/strip.lua"))
 	defer delete(reply)
 	testing.expect_value(t, reply, "\n")
 	nodes, valid := vm.declare(&r, &l, "TEST", 1280, 720)
