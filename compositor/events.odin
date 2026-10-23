@@ -6,7 +6,6 @@ import vm "../lua_runtime"
 import pam "../pam"
 import wl "../wayland"
 import wlr "../wlroots"
-import "base:runtime"
 import "core:strings"
 
 free_event :: proc(event: ^vm.Event) {
@@ -128,8 +127,7 @@ queue_output :: proc(output: ^Output, name: string) {
 		},
 	)
 }
-drain_events :: proc "c" (data: rawptr) {
-	context = runtime.default_context()
+drain_events :: proc(data: rawptr) {
 	drain_pending((^Server)(data))
 }
 drain_pending :: proc(s: ^Server) {

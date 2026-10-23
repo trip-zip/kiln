@@ -1,7 +1,7 @@
 package wlroots
 
 import "core:c"
-import wl "../wayland_server"
+import wl "../wayland"
 import xkb "../xkbcommon"
 
 // Layouts measured against the installed wlroots 0.20.2 headers on Linux amd64.
@@ -9,9 +9,9 @@ import xkb "../xkbcommon"
 // Opaque spans preserve unused fields without exposing them as API.
 
 wlr_backend_events :: struct #align(8) {
-	destroy: wl.wl_signal,
-	new_input: wl.wl_signal,
-	new_output: wl.wl_signal,
+	destroy: wl.Signal,
+	new_input: wl.Signal,
+	new_output: wl.Signal,
 }
 #assert(size_of(wlr_backend_events) == 48 && align_of(wlr_backend_events) == 8)
 #assert(offset_of(wlr_backend_events, new_input) == 16 && offset_of(wlr_backend_events, new_output) == 32)
@@ -25,14 +25,14 @@ wlr_backend :: struct #align(8) {
 #assert(offset_of(wlr_backend, events) == 16)
 
 wlr_output_events :: struct #align(8) {
-	frame: wl.wl_signal,
-	damage, needs_frame: wl.wl_signal,
+	frame: wl.Signal,
+	damage, needs_frame: wl.Signal,
 	_opaque_48: [16]u8,
-	commit: wl.wl_signal,
-	present: wl.wl_signal,
+	commit: wl.Signal,
+	present: wl.Signal,
     _opaque_96: [32]u8,
-	request_state: wl.wl_signal,
-	destroy: wl.wl_signal,
+	request_state: wl.Signal,
+	destroy: wl.Signal,
 }
 #assert(size_of(wlr_output_events) == 160 && align_of(wlr_output_events) == 8)
 #assert(offset_of(wlr_output_events, frame) == 0 && offset_of(wlr_output_events, commit) == 64)
@@ -42,7 +42,7 @@ wlr_output :: struct #align(8) {
 	_opaque_0: [48]u8,
 	name: cstring,
 	_opaque_56: [48]u8,
-	modes: wl.wl_list,
+	modes: wl.List,
 	_opaque_120: [8]u8,
 	width: i32,
 	height: i32,
@@ -109,8 +109,8 @@ wlr_output_event_request_state :: struct #align(8) {
 
 wlr_xdg_shell_events :: struct #align(8) {
 	_opaque_0: [16]u8,
-	new_toplevel: wl.wl_signal,
-	new_popup: wl.wl_signal,
+	new_toplevel: wl.Signal,
+	new_popup: wl.Signal,
 	_opaque_48: [16]u8,
 }
 #assert(size_of(wlr_xdg_shell_events) == 64 && align_of(wlr_xdg_shell_events) == 8)
@@ -128,7 +128,7 @@ wlr_xdg_surface :: struct #align(8) {
 	_opaque_0: [16]u8,
 	surface: ^wlr_surface,
 	_opaque_24: [40]u8,
-	popups: wl.wl_list,
+	popups: wl.List,
 	_opaque_80: [88]u8,
 	initialized: bool,
 	initial_commit: bool,
@@ -144,12 +144,12 @@ wlr_xdg_surface :: struct #align(8) {
 #assert(offset_of(wlr_xdg_surface, geometry) == 172)
 
 wlr_xdg_toplevel_events :: struct #align(8) {
-	destroy: wl.wl_signal,
-	request_maximize: wl.wl_signal,
-	request_fullscreen: wl.wl_signal,
-	request_minimize: wl.wl_signal,
+	destroy: wl.Signal,
+	request_maximize: wl.Signal,
+	request_fullscreen: wl.Signal,
+	request_minimize: wl.Signal,
 	_opaque_64: [64]u8,
-	set_title, set_app_id: wl.wl_signal,
+	set_title, set_app_id: wl.Signal,
 }
 #assert(size_of(wlr_xdg_toplevel_events) == 160 && align_of(wlr_xdg_toplevel_events) == 8)
 #assert(offset_of(wlr_xdg_toplevel_events, destroy) == 0 && offset_of(wlr_xdg_toplevel_events, request_maximize) == 16)
@@ -176,7 +176,7 @@ wlr_xdg_toplevel_state :: struct {
 #assert(offset_of(wlr_xdg_toplevel_state, width) == 16 && offset_of(wlr_xdg_toplevel_state, min_height) == 36)
 
 wlr_xdg_toplevel :: struct #align(8) {
-	resource: ^wl.wl_resource,
+	resource: ^wl.Resource,
 	base: ^wlr_xdg_surface,
 	parent: ^wlr_xdg_toplevel,
 	current: wlr_xdg_toplevel_state,
@@ -194,14 +194,14 @@ wlr_xdg_toplevel :: struct #align(8) {
 #assert(offset_of(wlr_xdg_toplevel, app_id) == 192 && offset_of(wlr_xdg_toplevel, events) == 200)
 
 wlr_xdg_popup_events :: struct #align(8) {
-	destroy, reposition: wl.wl_signal,
+	destroy, reposition: wl.Signal,
 }
 #assert(size_of(wlr_xdg_popup_events) == 32 && align_of(wlr_xdg_popup_events) == 8)
 #assert(offset_of(wlr_xdg_popup_events, destroy) == 0 && offset_of(wlr_xdg_popup_events, reposition) == 16)
 
 wlr_xdg_popup :: struct #align(8) {
 	base: ^wlr_xdg_surface,
-	link: wl.wl_list,
+	link: wl.List,
 	_opaque_24: [8]u8,
 	parent: ^wlr_surface,
 	_opaque_40: [8]u8,
@@ -217,18 +217,18 @@ wlr_xdg_popup :: struct #align(8) {
 
 wlr_surface_events :: struct #align(8) {
 	_opaque_0: [16]u8,
-	commit: wl.wl_signal,
-	map_: wl.wl_signal,
-	unmap: wl.wl_signal,
+	commit: wl.Signal,
+	map_: wl.Signal,
+	unmap: wl.Signal,
 	_opaque_64: [16]u8,
-	destroy: wl.wl_signal,
+	destroy: wl.Signal,
 }
 #assert(size_of(wlr_surface_events) == 96 && align_of(wlr_surface_events) == 8)
 #assert(offset_of(wlr_surface_events, commit) == 16 && offset_of(wlr_surface_events, map_) == 32)
 #assert(offset_of(wlr_surface_events, unmap) == 48)
 
 wlr_surface :: struct #align(8) {
-	resource: ^wl.wl_resource,
+	resource: ^wl.Resource,
 	_opaque_8: [16]u8,
 	buffer_damage: pixman_region32_t,
 	_opaque_48:    [24]u8,
@@ -249,7 +249,7 @@ wlr_surface_state :: struct #align(8) {
     _opaque_128: [16]u8,
 	width,height: i32,
 	_opaque_152: [8]u8,
-    subsurfaces_below, subsurfaces_above: wl.wl_list,
+    subsurfaces_below, subsurfaces_above: wl.List,
     _opaque_192: [96]u8,
 }
 #assert(size_of(wlr_surface_state)==288 && align_of(wlr_surface_state)==8)
@@ -259,7 +259,7 @@ wlr_surface_state :: struct #align(8) {
 #assert(offset_of(wlr_surface, events) == 712 && offset_of(wlr_surface,mapped)==688)
 
 wlr_input_device_events :: struct #align(8) {
-	destroy: wl.wl_signal,
+	destroy: wl.Signal,
 }
 #assert(size_of(wlr_input_device_events) == 16 && align_of(wlr_input_device_events) == 8)
 #assert(offset_of(wlr_input_device_events, destroy) == 0)
@@ -284,8 +284,8 @@ wlr_keyboard_modifiers :: struct #align(4) {
 #assert(offset_of(wlr_keyboard_modifiers, locked) == 8 && offset_of(wlr_keyboard_modifiers, group) == 12)
 
 wlr_keyboard_events :: struct #align(8) {
-	key: wl.wl_signal,
-	modifiers: wl.wl_signal,
+	key: wl.Signal,
+	modifiers: wl.Signal,
 	_opaque_32: [32]u8,
 }
 #assert(size_of(wlr_keyboard_events) == 64 && align_of(wlr_keyboard_events) == 8)
@@ -319,11 +319,11 @@ wlr_keyboard_key_event :: struct #align(4) {
 #assert(offset_of(wlr_keyboard_key_event, state) == 12)
 
 wlr_cursor_events :: struct #align(8) {
-	motion: wl.wl_signal,
-	motion_absolute: wl.wl_signal,
-	button: wl.wl_signal,
-	axis: wl.wl_signal,
-	frame: wl.wl_signal,
+	motion: wl.Signal,
+	motion_absolute: wl.Signal,
+	button: wl.Signal,
+	axis: wl.Signal,
+	frame: wl.Signal,
 	_opaque_80: [272]u8,
 }
 #assert(size_of(wlr_cursor_events) == 352 && align_of(wlr_cursor_events) == 8)
@@ -407,7 +407,7 @@ wlr_seat_pointer_state :: struct #align(8) {
 	focused_surface: ^wlr_surface,
 	sx,sy:f64,
 	_opaque_40: [304]u8,
-	events: struct { focus_change: wl.wl_signal },
+	events: struct { focus_change: wl.Signal },
 	_opaque_360: [24]u8,
 }
 #assert(size_of(wlr_seat_pointer_state) == 384 && align_of(wlr_seat_pointer_state) == 8)
@@ -415,13 +415,13 @@ wlr_seat_pointer_state :: struct #align(8) {
 
 wlr_seat_events :: struct #align(8) {
 	_opaque_0: [96]u8,
-	request_set_cursor: wl.wl_signal,
-	request_set_selection: wl.wl_signal,
+	request_set_cursor: wl.Signal,
+	request_set_selection: wl.Signal,
 	_opaque_128: [16]u8,
-	request_set_primary_selection: wl.wl_signal,
+	request_set_primary_selection: wl.Signal,
 	_opaque_160: [16]u8,
-	request_start_drag, start_drag: wl.wl_signal,
-	destroy: wl.wl_signal,
+	request_start_drag, start_drag: wl.Signal,
+	destroy: wl.Signal,
 }
 #assert(size_of(wlr_seat_events) == 224 && align_of(wlr_seat_events) == 8)
 #assert(offset_of(wlr_seat_events, request_set_cursor) == 96)
@@ -475,7 +475,7 @@ wlr_box :: struct { x, y, width, height: i32 }
 #assert(offset_of(wlr_box, x) == 0 && offset_of(wlr_box, y) == 4 && offset_of(wlr_box, width) == 8)
 #assert(offset_of(wlr_box, height) == 12)
 
-wlr_output_layout_events :: struct { add, change, destroy: wl.wl_signal }
+wlr_output_layout_events :: struct { add, change, destroy: wl.Signal }
 #assert(size_of(wlr_output_layout_events) == 48)
 #assert(offset_of(wlr_output_layout_events, change) == 16)
 wlr_output_layout :: struct #align(8) {

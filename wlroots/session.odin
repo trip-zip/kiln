@@ -1,11 +1,11 @@
 package wlroots
 
-import wl "../wayland_server"
+import wl "../wayland"
 
 wlr_session :: struct #align(8) {
     active:bool,
     _opaque_1:[327]u8,
-    events:struct { active,add_drm_card,destroy:wl.wl_signal },
+    events:struct { active,add_drm_card,destroy:wl.Signal },
     _opaque_376:[24]u8,
 }
 #assert(size_of(wlr_session)==400 && align_of(wlr_session)==8)

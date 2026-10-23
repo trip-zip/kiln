@@ -1,12 +1,12 @@
 package wlroots
 
-import wl "../wayland_server"
+import wl "../wayland"
 
 wlr_xdg_activation_v1 :: struct #align(8) {
     _opaque_0: [8]u8,
     token_timeout_msec: u32,
     _opaque_12: [20]u8,
-    events: struct { destroy, request_activate, new_token: wl.wl_signal },
+    events: struct { destroy, request_activate, new_token: wl.Signal },
     _opaque_80: [32]u8,
 }
 wlr_xdg_activation_token_v1 :: struct #align(8) {
@@ -15,7 +15,7 @@ wlr_xdg_activation_token_v1 :: struct #align(8) {
     _opaque_24: [8]u8,
     app_id: cstring,
     _opaque_40: [24]u8,
-    events: struct { destroy: wl.wl_signal },
+    events: struct { destroy: wl.Signal },
     _opaque_80: [72]u8,
 }
 wlr_xdg_activation_v1_request_activate_event :: struct {
@@ -25,12 +25,12 @@ wlr_xdg_activation_v1_request_activate_event :: struct {
 }
 foreign import activation_lib "system:wlroots-0.20"
 foreign activation_lib {
-    wlr_xdg_activation_v1_create :: proc(display: ^wl.wl_display) -> ^wlr_xdg_activation_v1 ---
+    wlr_xdg_activation_v1_create :: proc(display: ^wl.Display) -> ^wlr_xdg_activation_v1 ---
     wlr_xdg_activation_token_v1_create :: proc(manager: ^wlr_xdg_activation_v1) -> ^wlr_xdg_activation_token_v1 ---
     wlr_xdg_activation_token_v1_destroy :: proc(token: ^wlr_xdg_activation_token_v1) ---
     wlr_xdg_activation_token_v1_get_name :: proc(token: ^wlr_xdg_activation_token_v1) -> cstring ---
 }
-activation_create :: proc(display: ^wl.wl_display) -> ^wlr_xdg_activation_v1 {
+activation_create :: proc(display: ^wl.Display) -> ^wlr_xdg_activation_v1 {
     return wlr_xdg_activation_v1_create(display)
 }
 activation_mint :: proc(manager: ^wlr_xdg_activation_v1) -> (^wlr_xdg_activation_token_v1, cstring) {

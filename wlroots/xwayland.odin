@@ -1,6 +1,6 @@
 package wlroots
 
-import wl "../wayland_server"
+import wl "../wayland"
 import xcb "../xcb_raw"
 import icccm "../xcb_icccm_raw"
 
@@ -10,7 +10,7 @@ wlr_xwayland :: struct #align(8) {
     display_name: cstring,
     _opaque_40: [16]u8,
     seat: ^wlr_seat,
-    events: struct { destroy, ready, new_surface, remove_startup_info: wl.wl_signal },
+    events: struct { destroy, ready, new_surface, remove_startup_info: wl.Signal },
     _opaque_128: [152]u8,
 }
 wlr_xwayland_server :: struct #align(8) {
@@ -21,16 +21,16 @@ wlr_xwayland_server :: struct #align(8) {
     display: i32,
     display_name: [16]u8,
     _opaque_76: [52]u8,
-    events: struct { start, ready, destroy: wl.wl_signal },
+    events: struct { start, ready, destroy: wl.Signal },
     _opaque_176: [56]u8,
 }
 foreign import xwayland_lib "system:wlroots-0.20"
 foreign xwayland_lib {
-    wlr_xwayland_create :: proc(display: ^wl.wl_display, compositor: ^wlr_compositor, lazy: bool) -> ^wlr_xwayland ---
+    wlr_xwayland_create :: proc(display: ^wl.Display, compositor: ^wlr_compositor, lazy: bool) -> ^wlr_xwayland ---
     wlr_xwayland_destroy :: proc(xwayland: ^wlr_xwayland) ---
     wlr_xwayland_set_seat :: proc(xwayland: ^wlr_xwayland, seat: ^wlr_seat) ---
 }
-xwayland_create :: proc(display: ^wl.wl_display, compositor: ^wlr_compositor) -> ^wlr_xwayland {
+xwayland_create :: proc(display: ^wl.Display, compositor: ^wlr_compositor) -> ^wlr_xwayland {
     return wlr_xwayland_create(display,compositor,true)
 }
 xwayland_destroy :: proc(xwayland: ^wlr_xwayland) { wlr_xwayland_destroy(xwayland) }
@@ -54,27 +54,27 @@ xwayland_seat :: proc(xwayland: ^wlr_xwayland, seat: ^wlr_seat) { wlr_xwayland_s
 #assert(offset_of(type_of(wlr_xwayland_server{}.events),destroy)==32)
 
 wlr_xwayland_surface_events :: struct #align(8) {
-    destroy: wl.wl_signal,
-    request_configure: wl.wl_signal,
+    destroy: wl.Signal,
+    request_configure: wl.Signal,
     _opaque_32: [32]u8,
-    request_minimize: wl.wl_signal,
-    request_maximize: wl.wl_signal,
-    request_fullscreen: wl.wl_signal,
-    request_activate: wl.wl_signal,
+    request_minimize: wl.Signal,
+    request_maximize: wl.Signal,
+    request_fullscreen: wl.Signal,
+    request_activate: wl.Signal,
     _opaque_128: [128]u8,
-    associate: wl.wl_signal,
-    dissociate: wl.wl_signal,
-    set_title: wl.wl_signal,
-    set_class: wl.wl_signal,
-    set_role, set_parent: wl.wl_signal,
+    associate: wl.Signal,
+    dissociate: wl.Signal,
+    set_title: wl.Signal,
+    set_class: wl.Signal,
+    set_role, set_parent: wl.Signal,
     _opaque_352: [16]u8,
-    set_window_type, set_hints: wl.wl_signal,
+    set_window_type, set_hints: wl.Signal,
     _opaque_400: [64]u8,
-    set_geometry: wl.wl_signal,
+    set_geometry: wl.Signal,
     _opaque_480: [16]u8,
-    set_icon: wl.wl_signal,
+    set_icon: wl.Signal,
     _opaque_512: [32]u8,
-    map_request: wl.wl_signal,
+    map_request: wl.Signal,
     _opaque_560: [16]u8,
 }
 wlr_xwayland_surface :: struct #align(8) {

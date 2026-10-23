@@ -2,7 +2,7 @@ package wlroots
 
 import "core:c"
 import li "../libinput"
-import wl "../wayland_server"
+import wl "../wayland"
 import xkb "../xkbcommon"
 
 foreign import lib "system:wlroots-0.20"
@@ -13,7 +13,7 @@ wlr_output_mode :: struct {
 	width, height, refresh: i32,
 	preferred: bool,
 	picture_aspect_ratio: c.int,
-	link: wl.wl_list,
+	link: wl.List,
 }
 #assert(size_of(wlr_output_mode) == 40)
 #assert(offset_of(wlr_output_mode, width) == 0 && offset_of(wlr_output_mode, height) == 4)
@@ -25,7 +25,7 @@ wlr_output_layout_output :: struct {}
 wlr_compositor :: struct {
 	_opaque_0:  [16]u8,
 	events:     struct {
-		new_surface, destroy: wl.wl_signal,
+		new_surface, destroy: wl.Signal,
 	},
 	_opaque_48: [48]u8,
 }
@@ -61,21 +61,21 @@ foreign lib {
 	wlr_output_layout_output_at :: proc(layout: ^wlr_output_layout, x, y: f64) -> ^wlr_output ---
 	wlr_xdg_toplevel_set_tiled :: proc(toplevel: ^wlr_xdg_toplevel, edges: u32) -> u32 ---
 
-	wlr_xdg_output_manager_v1_create :: proc(display: ^wl.wl_display, layout: ^wlr_output_layout) -> ^wlr_xdg_output_manager_v1 ---
-	wlr_backend_autocreate :: proc(loop: ^wl.wl_event_loop, session_ptr: ^^wlr_session) -> ^wlr_backend ---
+	wlr_xdg_output_manager_v1_create :: proc(display: ^wl.Display, layout: ^wlr_output_layout) -> ^wlr_xdg_output_manager_v1 ---
+	wlr_backend_autocreate :: proc(loop: ^wl.Loop, session_ptr: ^^wlr_session) -> ^wlr_backend ---
 	wlr_backend_start :: proc(backend: ^wlr_backend) -> bool ---
 	wlr_backend_destroy :: proc(backend: ^wlr_backend) ---
 	wlr_renderer_autocreate :: proc(backend: ^wlr_backend) -> ^wlr_renderer ---
-	wlr_renderer_init_wl_display :: proc(renderer: ^wlr_renderer, display: ^wl.wl_display) -> bool ---
+	wlr_renderer_init_wl_display :: proc(renderer: ^wlr_renderer, display: ^wl.Display) -> bool ---
 	wlr_renderer_destroy :: proc(renderer: ^wlr_renderer) ---
 	wlr_allocator_autocreate :: proc(backend: ^wlr_backend, renderer: ^wlr_renderer) -> ^wlr_allocator ---
 	wlr_allocator_destroy :: proc(allocator: ^wlr_allocator) ---
-	wlr_compositor_create :: proc(display: ^wl.wl_display, version: u32, renderer: ^wlr_renderer) -> ^wlr_compositor ---
-	wlr_subcompositor_create :: proc(display: ^wl.wl_display) -> ^wlr_subcompositor ---
-	wlr_data_device_manager_create :: proc(display: ^wl.wl_display) -> ^wlr_data_device_manager ---
-	wlr_screencopy_manager_v1_create :: proc(display: ^wl.wl_display) -> ^wlr_screencopy_manager_v1 ---
+	wlr_compositor_create :: proc(display: ^wl.Display, version: u32, renderer: ^wlr_renderer) -> ^wlr_compositor ---
+	wlr_subcompositor_create :: proc(display: ^wl.Display) -> ^wlr_subcompositor ---
+	wlr_data_device_manager_create :: proc(display: ^wl.Display) -> ^wlr_data_device_manager ---
+	wlr_screencopy_manager_v1_create :: proc(display: ^wl.Display) -> ^wlr_screencopy_manager_v1 ---
 
-	wlr_output_layout_create :: proc(display: ^wl.wl_display) -> ^wlr_output_layout ---
+	wlr_output_layout_create :: proc(display: ^wl.Display) -> ^wlr_output_layout ---
 	wlr_output_layout_destroy :: proc(layout: ^wlr_output_layout) ---
 	wlr_output_layout_add_auto :: proc(layout: ^wlr_output_layout, output: ^wlr_output) -> ^wlr_output_layout_output ---
 	wlr_output_init_render :: proc(output: ^wlr_output, allocator: ^wlr_allocator, renderer: ^wlr_renderer) -> bool ---
@@ -91,7 +91,7 @@ foreign lib {
 	wlr_output_layout_add :: proc(layout: ^wlr_output_layout, output: ^wlr_output, x, y: c.int) -> ^wlr_output_layout_output ---
 
 
-	wlr_xdg_shell_create :: proc(display: ^wl.wl_display, version: u32) -> ^wlr_xdg_shell ---
+	wlr_xdg_shell_create :: proc(display: ^wl.Display, version: u32) -> ^wlr_xdg_shell ---
 	wlr_xdg_toplevel_set_size :: proc(toplevel: ^wlr_xdg_toplevel, width, height: i32) -> u32 ---
 	wlr_xdg_toplevel_set_fullscreen :: proc(toplevel: ^wlr_xdg_toplevel, fullscreen: bool) -> u32 ---
 	wlr_xdg_toplevel_set_maximized :: proc(toplevel: ^wlr_xdg_toplevel, maximized: bool) -> u32 ---
@@ -99,7 +99,7 @@ foreign lib {
 	wlr_xdg_toplevel_set_activated :: proc(toplevel: ^wlr_xdg_toplevel, activated: bool) -> u32 ---
 	wlr_xdg_surface_schedule_configure :: proc(surface: ^wlr_xdg_surface) -> u32 ---
 
-	wlr_seat_create :: proc(display: ^wl.wl_display, name: cstring) -> ^wlr_seat ---
+	wlr_seat_create :: proc(display: ^wl.Display, name: cstring) -> ^wlr_seat ---
 	wlr_seat_set_capabilities :: proc(seat: ^wlr_seat, capabilities: u32) ---
 	wlr_seat_set_keyboard :: proc(seat: ^wlr_seat, keyboard: ^wlr_keyboard) ---
 	wlr_seat_get_keyboard :: proc(seat: ^wlr_seat) -> ^wlr_keyboard ---

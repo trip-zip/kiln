@@ -1,6 +1,6 @@
 package authentication
 
-import "base:runtime"
+import "core:time"
 import "core:c"
 import "core:fmt"
 import "core:sys/linux"
@@ -29,10 +29,10 @@ terminate :: proc(a:^Attempt, reason:string) {
     a.reason=reason
     // The child owns its process group; the direct kill also covers pre-setsid failure.
     posix.kill(-a.pid,.SIGTERM);posix.kill(a.pid,.SIGTERM)
-    wl.arm_timer(a.timer,200)
+    wl.arm_timer(a.timer, 200*time.Millisecond)
 }
-timeout :: proc "c" (data:rawptr)->i32 {
-    context=runtime.default_context();a:=(^Attempt)(data)
+timeout :: proc(data:rawptr)->i32 {
+    a:=(^Attempt)(data)
     if a.reason=="" { terminate(a,"timeout") }
     else {
         a.killing=true
@@ -40,13 +40,13 @@ timeout :: proc "c" (data:rawptr)->i32 {
     }
     if a.source==nil {
         // Registration failure still has a preallocated timer for bounded cleanup.
-        exited(-1,0,a)
-        if a.pid>0 { wl.arm_timer(a.timer,20) }
+        exited(-1,{},a)
+        if a.pid>0 { wl.arm_timer(a.timer, 20*time.Millisecond) }
     }
     return 0
 }
-exited :: proc "c" (fd:i32,mask:u32,data:rawptr)->i32 {
-    context=runtime.default_context();a:=(^Attempt)(data)
+exited :: proc(fd:i32,mask: wl.Mask,data:rawptr)->i32 {
+    a:=(^Attempt)(data)
     status:c.int
     pid:posix.pid_t
     for { pid=posix.waitpid(a.pid,&status,{.NOHANG});if pid>=0 || posix.errno()!=.EINTR { break } }
@@ -126,7 +126,7 @@ submit :: proc(a:^Attempt,display:^wl.Display,generation,id:u64,password:string,
     n:=posix.send(a.fd,raw_data(bytes[:]),size_of(h)+len(password),{.NOSIGNAL})
     if n!=size_of(h)+len(password) { terminate(a,"submission");return false }
     posix.shutdown(a.fd,.WR)
-    if !wl.arm_timer(a.timer,TIMEOUT_MS) { terminate(a,"submission");return false }
+    if !wl.arm_timer(a.timer, time.Duration(TIMEOUT_MS)*time.Millisecond) { terminate(a,"submission");return false }
     return true
 }
 cancel :: proc(a:^Attempt) { terminate(a,"cancelled") }
@@ -140,6 +140,6 @@ shutdown :: proc(a:^Attempt) {
         posix.poll(([^]posix.pollfd)(&p),1,1000)
     }
     pid:=a.pid
-    exited(i32(a.exitfd),0,a)
+    exited(i32(a.exitfd),{},a)
     if a.pid!=0 { fmt.eprintf("Authentication helper %d did not retire within shutdown deadline\n",pid) }
 }

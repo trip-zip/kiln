@@ -1,7 +1,7 @@
 package compositor
 
-import "base:runtime"
 import "core:os"
+import "core:sys/linux"
 import "core:sys/posix"
 import "core:time"
 
@@ -19,8 +19,7 @@ start_command :: proc(s: ^Server, socket, command: string) -> bool {
 	return true
 }
 
-startup_exited :: proc "c" (number: i32, data: rawptr) -> i32 {
-	context = runtime.default_context()
+startup_exited :: proc(number: linux.Signal, data: rawptr) -> i32 {
 	s := (^Server)(data)
 	if s.startup_running {
 		_, err := os.process_wait(s.startup, timeout = 0)

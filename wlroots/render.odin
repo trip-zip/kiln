@@ -1,6 +1,6 @@
 package wlroots
 
-import wl "../wayland_server"
+import wl "../wayland"
 import "base:runtime"
 import "core:math"
 
@@ -38,7 +38,7 @@ surface_density :: proc(surface: ^Surface, outputs: []^wlr_output) {
 // Include unmapped children so their first desynchronized map can wake the output.
 surface_known :: proc(surface: ^Surface, iterator: surface_iterator, data: rawptr) {
 	iterator(surface, 0, 0, data)
-	for head in ([]^wl.wl_list{&surface.current.subsurfaces_below, &surface.current.subsurfaces_above}) {
+	for head in ([]^wl.List{&surface.current.subsurfaces_below, &surface.current.subsurfaces_above}) {
 		if head.next == nil {continue}
 		for link := head.next; link != head; link = link.next {
 			state := runtime.container_of(link, wlr_subsurface_parent_state, "link")

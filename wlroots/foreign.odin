@@ -1,11 +1,11 @@
 package wlroots
 
-import wl "../wayland_server"
+import wl "../wayland"
 
 wlr_foreign_toplevel_manager_v1 :: struct {}
 wlr_foreign_toplevel_handle_v1 :: struct #align(8) {
     _opaque_0: [96]u8,
-    events: struct { request_maximize, request_minimize, request_activate, request_fullscreen, request_close, set_rectangle, destroy: wl.wl_signal },
+    events: struct { request_maximize, request_minimize, request_activate, request_fullscreen, request_close, set_rectangle, destroy: wl.Signal },
     _opaque_208: [8]u8,
 }
 wlr_foreign_toplevel_handle_v1_maximized_event :: struct {
@@ -40,7 +40,7 @@ wlr_foreign_toplevel_handle_v1_fullscreen_event :: struct {
 #assert(offset_of(wlr_foreign_toplevel_handle_v1_fullscreen_event,output)==16)
 foreign import foreign_lib "system:wlroots-0.20"
 foreign foreign_lib {
-    wlr_foreign_toplevel_manager_v1_create :: proc(display: ^wl.wl_display) -> ^wlr_foreign_toplevel_manager_v1 ---
+    wlr_foreign_toplevel_manager_v1_create :: proc(display: ^wl.Display) -> ^wlr_foreign_toplevel_manager_v1 ---
     wlr_foreign_toplevel_handle_v1_create :: proc(manager: ^wlr_foreign_toplevel_manager_v1) -> ^wlr_foreign_toplevel_handle_v1 ---
     wlr_foreign_toplevel_handle_v1_destroy :: proc(handle: ^wlr_foreign_toplevel_handle_v1) ---
     wlr_foreign_toplevel_handle_v1_set_title :: proc(handle: ^wlr_foreign_toplevel_handle_v1, value: cstring) ---
@@ -52,7 +52,7 @@ foreign foreign_lib {
     wlr_foreign_toplevel_handle_v1_output_enter :: proc(handle: ^wlr_foreign_toplevel_handle_v1, output: ^wlr_output) ---
     wlr_foreign_toplevel_handle_v1_output_leave :: proc(handle: ^wlr_foreign_toplevel_handle_v1, output: ^wlr_output) ---
 }
-foreign_manager_create :: proc(display: ^wl.wl_display) -> ^wlr_foreign_toplevel_manager_v1 { return wlr_foreign_toplevel_manager_v1_create(display) }
+foreign_manager_create :: proc(display: ^wl.Display) -> ^wlr_foreign_toplevel_manager_v1 { return wlr_foreign_toplevel_manager_v1_create(display) }
 foreign_handle_create :: proc(manager: ^wlr_foreign_toplevel_manager_v1) -> ^wlr_foreign_toplevel_handle_v1 { return wlr_foreign_toplevel_handle_v1_create(manager) }
 foreign_handle_destroy :: proc(handle: ^wlr_foreign_toplevel_handle_v1) { wlr_foreign_toplevel_handle_v1_destroy(handle) }
 foreign_output :: proc(handle: ^wlr_foreign_toplevel_handle_v1, old, next: ^wlr_output) {

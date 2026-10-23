@@ -19,7 +19,7 @@ DEFINES = -define:KILN_DATADIR="$(datadir)/kiln"
 LDFLAGS = -extra-linker-flags:"-Wl,--export-dynamic"
 CLAY = clay/linux/clay.a
 
-.PHONY: all run check test test-nested install uninstall clean
+.PHONY: all run check test test-nested protocols install uninstall clean
 
 all: build/kiln build/kiln-client
 
@@ -30,6 +30,14 @@ build/kiln: $(CLAY) $(shell find . -name '*.odin' -not -path './build/*')
 build/kiln-client: $(wildcard command_client/*.odin)
 	@mkdir -p build
 	$(ODIN) build command_client -out:$@
+
+build/kiln-scanner: $(wildcard scanner/*.odin)
+	@mkdir -p build
+	$(ODIN) build scanner -out:$@
+
+protocols: build/kiln-scanner
+	@mkdir -p protocols
+	./build/kiln-scanner --export-c /usr/share/wayland/wayland.xml protocols/wayland.odin
 
 # Clay is a single-header C library; its archive is built once from the
 # vendored header, next to the binding, the way Odin's vendor packages do.
@@ -46,6 +54,8 @@ check: $(CLAY)
 	$(ODIN) check . -vet
 	$(ODIN) check . -vet -define:KILN_OUTPUT_FIXTURE=true -define:KILN_AUTH_FIXTURE=true
 	$(ODIN) check command_client -vet
+	$(ODIN) check scanner -vet
+	$(ODIN) check protocols -vet -no-entry-point
 	$(ODIN) check tests -vet -no-entry-point
 	sh scripts/widget-lint.sh
 
@@ -54,6 +64,8 @@ check: $(CLAY)
 test: all
 	dbus-run-session -- $(ODIN) test . -all-packages -define:ODIN_TEST_THREADS=1 -out:build/kiln-test $(LDFLAGS)
 	$(ODIN) test command_client -out:build/kiln-client-test
+	$(ODIN) test scanner -out:build/kiln-scanner-test
+	$(ODIN) test protocols -out:build/kiln-protocols-test $(LDFLAGS)
 	$(ODIN) test tests -out:build/tests $(LDFLAGS)
 
 test-nested: all

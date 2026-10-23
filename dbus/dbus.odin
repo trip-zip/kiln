@@ -1,5 +1,6 @@
 package dbus
 
+import "core:time"
 import "base:runtime"
 import "core:fmt"
 import "core:strings"
@@ -50,11 +51,11 @@ wake :: proc(b: ^Bus) {
     if b.handle==nil { return }
     events:=raw.sd_bus_get_events(b.handle)
     deadline:u64
-    if events<0 || raw.sd_bus_get_timeout(b.handle,&deadline)<0 { b.failed=true;wl.arm_timer(b.timer,1);return }
-    mask:u32
-    if events&1!=0 { mask|=wl.READABLE }
-    if events&4!=0 { mask|=wl.WRITABLE }
-    if !wl.update_fd(b.fd,mask) || !wl.arm_timer(b.timer,delay_ms(deadline,now_usec())) { b.failed=true;wl.arm_timer(b.timer,1) }
+    if events<0 || raw.sd_bus_get_timeout(b.handle,&deadline)<0 { b.failed=true;wl.arm_timer(b.timer, 1*time.Millisecond);return }
+    mask:wl.Mask
+    if events&1!=0 { mask+=wl.READABLE }
+    if events&4!=0 { mask+=wl.WRITABLE }
+    if !wl.update_fd(b.fd,mask) || !wl.arm_timer(b.timer, time.Duration(delay_ms(deadline,now_usec()))*time.Millisecond) { b.failed=true;wl.arm_timer(b.timer, 1*time.Millisecond) }
 }
 drain :: proc(b: ^Bus) {
     if b.failed { disconnected(b);return }
@@ -67,15 +68,13 @@ drain :: proc(b: ^Bus) {
         if result==0 { wake(b);return }
     }
     wake(b)
-    if b.timer!=nil { wl.arm_timer(b.timer,1) }
+    if b.timer!=nil { wl.arm_timer(b.timer, 1*time.Millisecond) }
 }
-readable :: proc "c" (fd:i32,mask:u32,data:rawptr) -> i32 {
-    context=runtime.default_context()
+readable :: proc(fd:i32,mask: wl.Mask,data:rawptr) -> i32 {
     b:=(^Bus)(data);context.allocator=b.allocator
     drain(b);return 0
 }
-timeout :: proc "c" (data:rawptr) -> i32 {
-    context=runtime.default_context()
+timeout :: proc(data:rawptr) -> i32 {
     b:=(^Bus)(data);context.allocator=b.allocator
     drain(b);return 0
 }

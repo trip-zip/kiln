@@ -1,6 +1,6 @@
 package compositor
 
-
+import "core:time"
 import vm "../lua_runtime"
 import wl "../wayland"
 import wlr "../wlroots"
@@ -24,10 +24,9 @@ runtime_idle_timeout :: proc(data: rawptr, ms: i32) {
 	if s.idle {s.idle = false
 		queue_event(s, vm.Event{class = "idle", name = "stop"})}
 	s.idle_timeout_ms = max(0, ms)
-	wl.arm_timer(s.idle_timer, s.idle_timeout_ms)
+	wl.arm_timer(s.idle_timer, time.Duration(s.idle_timeout_ms)*time.Millisecond)
 }
-idle_timeout :: proc "c" (data: rawptr) -> i32 {
-	context = runtime.default_context()
+idle_timeout :: proc(data: rawptr) -> i32 {
 	s := (^Server)(data)
 	if !s.shutting_down && !s.idle && s.idle_timeout_ms > 0 {
 		s.idle = true
@@ -40,7 +39,7 @@ idle_activity :: proc(s: ^Server) {
 	if s.idle_notifier != nil {wlr.idle_activity(s.idle_notifier, s.seat)}
 	if s.idle {s.idle = false
 		queue_event(s, vm.Event{class = "idle", name = "stop"})}
-	if s.idle_timeout_ms > 0 {wl.arm_timer(s.idle_timer, s.idle_timeout_ms)}
+	if s.idle_timeout_ms > 0 {wl.arm_timer(s.idle_timer, time.Duration(s.idle_timeout_ms)*time.Millisecond)}
 }
 inhibitor_visible :: proc(s: ^Server, surface: ^wlr.wlr_surface) -> bool {
 	if surface == nil || !surface.mapped {return false}

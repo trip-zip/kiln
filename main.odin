@@ -4,8 +4,10 @@ import "core:fmt"
 import "core:os"
 import "compositor"
 import "authentication"
+import "wayland_c"
 
 main :: proc() {
+    wayland_c.install()
     if len(os.args)==2 && os.args[1]=="--auth-worker" { os.exit(int(authentication.worker_main())) }
 	command := ""
 	if len(os.args) == 3 && os.args[1] == "-s" {

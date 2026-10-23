@@ -1,6 +1,5 @@
 package ipc
 
-import "base:runtime"
 import "core:c"
 import "core:fmt"
 import "core:os"
@@ -93,8 +92,7 @@ close_client :: proc(client: ^Client) {
 	delete(client.reply)
 	free(client)
 }
-connection :: proc "c" (fd: i32, mask: u32, data: rawptr) -> i32 {
-	context = runtime.default_context()
+connection :: proc(fd: i32, mask: wl.Mask, data: rawptr) -> i32 {
 	s := (^Server)(data)
 	peer := posix.accept(posix.FD(fd), nil, nil)
 	if peer < 0 { return 0 }
@@ -118,8 +116,7 @@ flush :: proc(client: ^Client) {
 		close_client(client)
 	}
 }
-ready :: proc "c" (fd: i32, mask: u32, data: rawptr) -> i32 {
-	context = runtime.default_context()
+ready :: proc(fd: i32, mask: wl.Mask, data: rawptr) -> i32 {
 	client := (^Client)(data)
 	if client.writing { flush(client); return 0 }
 	chunk: [4096]u8

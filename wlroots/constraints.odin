@@ -1,12 +1,12 @@
 package wlroots
 
-import wl "../wayland_server"
+import wl "../wayland"
 
 pixman_region32_t :: struct #align(8) { _opaque: [24]u8 }
 wlr_relative_pointer_manager_v1 :: struct {}
 wlr_pointer_constraints_v1 :: struct #align(8) {
     _opaque_0: [24]u8,
-    events: struct { destroy, new_constraint: wl.wl_signal },
+    events: struct { destroy, new_constraint: wl.Signal },
     _opaque_56: [32]u8,
 }
 wlr_pointer_constraint_v1_state :: struct {
@@ -23,13 +23,13 @@ wlr_pointer_constraint_v1 :: struct #align(8) {
     region: pixman_region32_t,
     current: wlr_pointer_constraint_v1_state,
     _opaque_120: [72]u8,
-    events: struct { set_region, destroy: wl.wl_signal },
+    events: struct { set_region, destroy: wl.Signal },
     _opaque_224: [104]u8,
 }
 foreign import constraints_lib "system:wlroots-0.20"
 foreign constraints_lib {
-    wlr_pointer_constraints_v1_create :: proc(display: ^wl.wl_display) -> ^wlr_pointer_constraints_v1 ---
-    wlr_relative_pointer_manager_v1_create :: proc(display: ^wl.wl_display) -> ^wlr_relative_pointer_manager_v1 ---
+    wlr_pointer_constraints_v1_create :: proc(display: ^wl.Display) -> ^wlr_pointer_constraints_v1 ---
+    wlr_relative_pointer_manager_v1_create :: proc(display: ^wl.Display) -> ^wlr_relative_pointer_manager_v1 ---
     wlr_pointer_constraints_v1_constraint_for_surface :: proc(manager: ^wlr_pointer_constraints_v1, surface: ^wlr_surface, seat: ^wlr_seat) -> ^wlr_pointer_constraint_v1 ---
     wlr_pointer_constraint_v1_send_activated :: proc(constraint: ^wlr_pointer_constraint_v1) ---
     wlr_pointer_constraint_v1_send_deactivated :: proc(constraint: ^wlr_pointer_constraint_v1) ---
@@ -39,8 +39,8 @@ foreign constraints_lib {
     wlr_cursor_warp :: proc(cursor: ^wlr_cursor,device: ^wlr_input_device,x,y: f64) -> bool ---
     wlr_seat_pointer_warp :: proc(seat: ^wlr_seat,x,y: f64) ---
 }
-constraints_create :: proc(display: ^wl.wl_display) -> ^wlr_pointer_constraints_v1 { return wlr_pointer_constraints_v1_create(display) }
-relative_create :: proc(display: ^wl.wl_display) -> ^wlr_relative_pointer_manager_v1 { return wlr_relative_pointer_manager_v1_create(display) }
+constraints_create :: proc(display: ^wl.Display) -> ^wlr_pointer_constraints_v1 { return wlr_pointer_constraints_v1_create(display) }
+relative_create :: proc(display: ^wl.Display) -> ^wlr_relative_pointer_manager_v1 { return wlr_relative_pointer_manager_v1_create(display) }
 constraint_for :: proc(manager: ^wlr_pointer_constraints_v1,seat: ^wlr_seat) -> ^wlr_pointer_constraint_v1 {
     if manager==nil || seat.pointer_state.focused_surface==nil { return nil }
     return wlr_pointer_constraints_v1_constraint_for_surface(manager,seat.pointer_state.focused_surface,seat)

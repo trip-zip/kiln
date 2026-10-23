@@ -1,5 +1,6 @@
 package compositor
 
+import "core:time"
 import sp "../scene_paint"
 
 import layout "../layout"
@@ -78,8 +79,7 @@ layer_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	wl.listen(&h.events.destroy, &l.destroy, layer_destroy)
 	wl.listen(&h.events.new_popup, &l.new_popup, layer_popup)
 }
-layer_watchdog :: proc "c" (data: rawptr) -> i32 {
-	context = runtime.default_context()
+layer_watchdog :: proc(data: rawptr) -> i32 {
 	l := (^Layer)(data)
 	if !l.configured {
 		fmt.eprintf(
@@ -98,7 +98,7 @@ layer_commit :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 		l.epoch += 1
 		l.configured = false
 		queue_layer(l, "map")
-		if l.watchdog != nil {wl.arm_timer(l.watchdog, 3000)}
+		if l.watchdog != nil {wl.arm_timer(l.watchdog, 3000*time.Millisecond)}
 	} else if l.handle.initialized && l.handle.current.committed != 0 {queue_layer(l, "commit")}
 }
 layer_map :: proc "c" (listener: ^wl.Listener, data: rawptr) {

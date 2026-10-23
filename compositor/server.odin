@@ -108,8 +108,7 @@ fail :: proc(s: ^Server, message: string) {
 	wl.terminate(s.display)
 }
 
-stop :: proc "c" (number: i32, data: rawptr) -> i32 {
-	context = runtime.default_context()
+stop :: proc(number: linux.Signal, data: rawptr) -> i32 {
 	wl.terminate((^Server)(data).display)
 	return 0
 }
@@ -305,10 +304,10 @@ run :: proc(startup_command := "") -> bool {
 	wl.listen(&s.backend.events.new_output, &s.new_output, output_added)
 	wl.listen(&s.backend.events.destroy, &s.backend_destroy, backend_destroyed)
 
-	term := wl.on_signal(s.display, 15, stop, &s)
+	term := wl.on_signal(s.display, .SIGTERM, stop, &s)
 	if term == nil {return false}
 	defer wl.remove_source(term)
-	interrupt := wl.on_signal(s.display, 2, stop, &s)
+	interrupt := wl.on_signal(s.display, .SIGINT, stop, &s)
 	if interrupt == nil {return false}
 	defer wl.remove_source(interrupt)
 
@@ -318,7 +317,7 @@ run :: proc(startup_command := "") -> bool {
 	if !wlr.wlr_backend_start(s.backend) || s.failed {return false}
 	init_xwayland(&s, compositor)
 	runtime_cursor(&s, "default")
-	child := wl.on_signal(s.display, 17, startup_exited, &s)
+	child := wl.on_signal(s.display, .SIGCHLD, startup_exited, &s)
 	if child == nil {return false}
 	defer wl.remove_source(child)
 	if os.set_env("WAYLAND_DISPLAY", socket) != nil {return false}

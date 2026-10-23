@@ -1,7 +1,7 @@
 package wlroots
 
 import "core:c"
-import wl "../wayland_server"
+import wl "../wayland"
 foreign import lib "system:wlroots-0.20"
 
 WLR_BUFFER_CAP_DMABUF :: u32(1 << 1)
@@ -15,7 +15,7 @@ wlr_buffer :: struct #align(8) {
 	n_locks: c.size_t,
 	accessing_data_ptr: bool,
 	_padding33: [7]u8,
-	events: struct { destroy, release: wl.wl_signal },
+	events: struct { destroy, release: wl.Signal },
 	_opaque72: [16]u8,
 }
 wlr_dmabuf_attributes :: struct {

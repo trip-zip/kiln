@@ -1,7 +1,7 @@
 package scene_paint
 
 import wl "../wayland"
-import raw "../wayland_server"
+import raw "../wayland"
 import wlr "../wlroots"
 import "base:runtime"
 import "core:testing"
@@ -76,28 +76,28 @@ current_subsurface_order_and_desynchronized_damage :: proc(t: ^testing.T) {
 	)
 	testing.expect_value(t, positions[0].x, 21)
 	testing.expect_value(t, positions[0].y, 37)
-	raw.wl_list_remove(&sub.current.link)
+	raw.list_remove(&sub.current.link)
 	wl.insert(&parent.current.subsurfaces_above, &sub.current.link)
 	sub.current.x, sub.current.y = -9, 31
-	raw.wl_signal_emit_mutable(&parent.events.commit, &parent)
+	raw.signal_emit_mutable(&parent.events.commit, &parent)
 	positions = current_surfaces(o.parts[0])
 	testing.expect(t, positions[0].surface == &parent && positions[1].surface == &child)
 	testing.expect_value(t, positions[1].x, 1)
 	testing.expect_value(t, positions[1].y, 51)
 	child.mapped = false
-	raw.wl_signal_emit_mutable(&child.events.unmap, &child)
+	raw.signal_emit_mutable(&child.events.unmap, &child)
 	clear(&o.damage)
 	child.mapped = true
-	raw.wl_signal_emit_mutable(&child.events.map_, &child)
+	raw.signal_emit_mutable(&child.events.map_, &child)
 	testing.expect(t, len(o.damage) > 0)
 	clear(&o.damage)
-	raw.wl_signal_emit_mutable(&child.events.commit, &child)
+	raw.signal_emit_mutable(&child.events.commit, &child)
 	testing.expect(t, len(o.damage) > 0)
-	raw.wl_list_remove(&sub.current.link)
-	raw.wl_signal_emit_mutable(&child.events.destroy, &child)
+	raw.list_remove(&sub.current.link)
+	raw.signal_emit_mutable(&child.events.destroy, &child)
 	testing.expect_value(t, len(o.subscriptions), 1)
 	testing.expect(t, wl.empty(&child.events.commit.listener_list))
-	raw.wl_signal_emit_mutable(&parent.events.destroy, &parent)
+	raw.signal_emit_mutable(&parent.events.destroy, &parent)
 	testing.expect(t, len(o.parts) == 0 && len(o.subscriptions) == 0)
 	testing.expect(t, wl.empty(&parent.events.commit.listener_list))
 }
@@ -248,7 +248,7 @@ reacquired_buffer_repaints_only_damage_since_presentation :: proc(t: ^testing.T)
 	testing.expect_value(t, len(boxes), 0)
 	testing.expect_value(t, len(second.boxes), 1)
 	testing.expect_value(t, second.boxes[0], box3)
-	raw.wl_signal_emit_mutable(&a.events.destroy, &a)
+	raw.signal_emit_mutable(&a.events.destroy, &a)
 	testing.expect_value(t, len(o.history), 1)
 	testing.expect(t, wl.empty(&a.events.destroy.listener_list))
 }

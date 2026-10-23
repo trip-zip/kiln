@@ -38,8 +38,7 @@ finish_pipe :: proc(p: ^Pipe) {
 	queue_event(p.server,vm.Event{class="spawn",name="exit",id=p.id,generation=p.generation,exit_code=p.code})
 	drop_pipe(p)
 }
-pipe_readable :: proc "c" (fd: i32, mask: u32, data: rawptr) -> i32 {
-	context=runtime.default_context()
+pipe_readable :: proc(fd: i32, mask: wl.Mask, data: rawptr) -> i32 {
 	stream:=(^Pipe_Stream)(data)
 	p:=stream.pipe
 	context.allocator=p.allocator
@@ -60,8 +59,7 @@ pipe_readable :: proc "c" (fd: i32, mask: u32, data: rawptr) -> i32 {
 	}
 	return 0
 }
-pipe_exited :: proc "c" (fd: i32, mask: u32, data: rawptr) -> i32 {
-	context=runtime.default_context()
+pipe_exited :: proc(fd: i32, mask: wl.Mask, data: rawptr) -> i32 {
 	p:=(^Pipe)(data)
 	context.allocator=p.allocator
 	status: i32

@@ -1,8 +1,8 @@
 package wlroots
 
-import wl "../wayland_server"
+import wl "../wayland"
 
-idle_create :: proc(display: ^wl.wl_display) -> (^wlr_idle_notifier_v1, ^wlr_idle_inhibit_manager_v1) {
+idle_create :: proc(display: ^wl.Display) -> (^wlr_idle_notifier_v1, ^wlr_idle_inhibit_manager_v1) {
     return wlr_idle_notifier_v1_create(display), wlr_idle_inhibit_v1_create(display)
 }
 idle_inhibit :: proc(notifier: ^wlr_idle_notifier_v1, on: bool) { wlr_idle_notifier_v1_set_inhibited(notifier,on) }

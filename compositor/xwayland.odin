@@ -1,5 +1,6 @@
 package compositor
 
+import "core:time"
 import "base:runtime"
 import "core:fmt"
 import "core:os"
@@ -30,17 +31,16 @@ xwayland_started :: proc "c" (listener: ^wl.Listener, data: rawptr) {
     s:=wl.owner(listener,Server,"xwayland_start")
     s.xwayland_polls=0
     if s.xwayland_watch==nil { s.xwayland_watch=wl.on_timer(s.display,xwayland_check_start,s) }
-    if s.xwayland_watch!=nil { wl.arm_timer(s.xwayland_watch,25) }
+    if s.xwayland_watch!=nil { wl.arm_timer(s.xwayland_watch, 25*time.Millisecond) }
 }
-xwayland_check_start :: proc "c" (data: rawptr) -> i32 {
-    context=runtime.default_context()
+xwayland_check_start :: proc(data: rawptr) -> i32 {
     s:=(^Server)(data)
     s.xwayland_polls+=1
     if s.xwayland==nil || s.xwayland.server==nil || s.xwayland.server.display<0 {
         os.set_env("DISPLAY",X11_UNAVAILABLE)
         fmt.eprintln("XWayland startup failed; child DISPLAY disabled, native Wayland remains available")
     } else if !s.xwayland.server.ready && s.xwayland_polls<400 {
-        wl.arm_timer(s.xwayland_watch,25)
+        wl.arm_timer(s.xwayland_watch, 25*time.Millisecond)
         return 0
     } else if !s.xwayland.server.ready {
         fmt.eprintln("XWayland readiness timed out; supervision remains with wlroots")

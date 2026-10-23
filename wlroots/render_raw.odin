@@ -1,7 +1,7 @@
 package wlroots
 
 import "core:sys/posix"
-import wl "../wayland_server"
+import wl "../wayland"
 
 wlr_xdg_popup_state :: struct { geometry: wlr_box, reactive: bool,
 }
@@ -50,7 +50,7 @@ foreign render_lib {
 // Only the current relationship is read; wlroots owns both state and lifetime.
 wlr_subsurface_parent_state :: struct {
 	x, y: i32,
-	link: wl.wl_list,
+	link: wl.List,
 	_opaque_24: [8]u8,
 }
 wlr_subsurface :: struct {

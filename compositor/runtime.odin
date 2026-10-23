@@ -20,8 +20,7 @@ request_quit :: proc(data: rawptr) {
 		if s.quit_source == nil {fail(s, "Cannot schedule quit")}
 	}
 }
-quit_idle :: proc "c" (data: rawptr) {
-	context = runtime.default_context()
+quit_idle :: proc(data: rawptr) {
 	s := (^Server)(data)
 	s.quit_source = nil
 	wl.terminate(s.display)

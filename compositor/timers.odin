@@ -1,5 +1,6 @@
 package compositor
 
+import "core:time"
 import "base:runtime"
 import vm "../lua_runtime"
 import wl "../wayland"
@@ -16,7 +17,7 @@ runtime_timer_add :: proc(data: rawptr, id: u64, ms: i32) -> bool {
 	t:=new(Timer)
 	t^={server=s,allocator=context.allocator,id=id}
 	t.source=wl.on_timer(s.display,timer_ready,t)
-	if t.source==nil || !wl.arm_timer(t.source,ms) {
+	if t.source==nil || !wl.arm_timer(t.source, time.Duration(ms)*time.Millisecond) {
 		wl.remove_source(t.source);free(t);return false
 	}
 	if s.timers==nil { s.timers=make(map[u64]^Timer) }
@@ -31,8 +32,7 @@ runtime_timer_remove :: proc(data: rawptr, id: u64) {
 	wl.remove_source(t.source)
 	free(t,t.allocator)
 }
-timer_ready :: proc "c" (data: rawptr) -> i32 {
-	context=runtime.default_context()
+timer_ready :: proc(data: rawptr) -> i32 {
 	t:=(^Timer)(data)
 	context.allocator=t.allocator
 	s,id:=t.server,t.id

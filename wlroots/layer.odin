@@ -1,11 +1,11 @@
 package wlroots
 
 import "core:c"
-import wl "../wayland_server"
+import wl "../wayland"
 
 wlr_layer_shell_v1 :: struct #align(8) {
     _opaque_0: [8]u8,
-    events: struct { new_surface, destroy: wl.wl_signal },
+    events: struct { new_surface, destroy: wl.Signal },
     _opaque_40: [32]u8,
 }
 wlr_layer_surface_v1_state :: struct {
@@ -21,25 +21,25 @@ wlr_layer_surface_v1 :: struct #align(8) {
     surface: ^wlr_surface,
     output: ^wlr_output,
 	_opaque_16: [16]u8,
-	popups: wl.wl_list,
+	popups: wl.List,
     namespace: cstring,
     _opaque_56: [24]u8,
     current, pending: wlr_layer_surface_v1_state,
     initialized, initial_commit: bool,
     _opaque_202: [6]u8,
-    events: struct { destroy, new_popup: wl.wl_signal },
+    events: struct { destroy, new_popup: wl.Signal },
     data: rawptr,
     _opaque_248: [40]u8,
 }
 foreign import layer_lib "system:wlroots-0.20"
 foreign layer_lib {
-    wlr_layer_shell_v1_create :: proc(display: ^wl.wl_display, version: u32) -> ^wlr_layer_shell_v1 ---
+    wlr_layer_shell_v1_create :: proc(display: ^wl.Display, version: u32) -> ^wlr_layer_shell_v1 ---
     wlr_layer_surface_v1_configure :: proc(surface: ^wlr_layer_surface_v1, width, height: u32) -> u32 ---
     wlr_layer_surface_v1_destroy :: proc(surface: ^wlr_layer_surface_v1) ---
 }
 
 // Protocol version four deliberately excludes exclusive-edge requests.
-layer_shell_create :: proc(display: ^wl.wl_display) -> ^wlr_layer_shell_v1 {
+layer_shell_create :: proc(display: ^wl.Display) -> ^wlr_layer_shell_v1 {
     return wlr_layer_shell_v1_create(display, 4)
 }
 layer_configure :: proc(surface: ^wlr_layer_surface_v1, width, height: u32) {
