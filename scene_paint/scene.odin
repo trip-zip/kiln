@@ -14,9 +14,11 @@ Node :: struct {
 	parts:   [dynamic]Part,
 	scale:   f32,
 }
+
 key :: proc(command: layout.Command) -> u64 {
 	kind: u64
-	switch _ in command.content {case layout.Rectangle:
+	switch _ in command.content {
+	case layout.Rectangle:
 		kind = 1
 	case layout.Border:
 		kind = 2
@@ -25,33 +27,43 @@ key :: proc(command: layout.Command) -> u64 {
 	case layout.Client:
 		kind = 4
 	case layout.Image:
-		kind = 5}
+		kind = 5
+	}
 	return u64(command.id) << 8 | kind
 }
+
 owned_copy :: proc(command: layout.Command) -> layout.Command {
 	copy := command
-	if t, ok := copy.content.(layout.Text); ok {t.value = strings.clone(t.value)
-		copy.content = t}
+	if t, ok := copy.content.(layout.Text); ok {
+		t.value = strings.clone(t.value)
+		copy.content = t
+	}
 	return copy
 }
-free_command :: proc(command: layout.Command) {if t, ok := command.content.(layout.Text);
-	   ok {delete(t.value)}}
+
+free_command :: proc(command: layout.Command) {
+	if t, ok := command.content.(layout.Text); ok {delete(t.value)}
+}
+
 equal_content :: proc(a, b: layout.Command) -> bool {
 	return a.box.width == b.box.width && a.box.height == b.box.height && a.content == b.content
 }
-square :: proc(c: layout.Command) -> bool {r, ok := c.content.(layout.Rectangle)
-	return ok && !layout.inspector_highlight(c.id) && r.radii == paint.Radii{}}
-premultiply :: proc(c: paint.Color) -> paint.Color {return {
-		c[0] * c[3],
-		c[1] * c[3],
-		c[2] * c[3],
-		c[3],
-	}}
+
+square :: proc(c: layout.Command) -> bool {
+	r, ok := c.content.(layout.Rectangle)
+	return ok && !layout.inspector_highlight(c.id) && r.radii == paint.Radii{}
+}
+
+premultiply :: proc(c: paint.Color) -> paint.Color {
+	return {c[0] * c[3], c[1] * c[3], c[2] * c[3], c[3]}
+}
+
 add_rect :: proc(n: ^Node, x, y, w, h: i32, color: paint.Color) -> bool {
 	if w <= 0 || h <= 0 {return true}
 	append(&n.parts, Part{kind = .Solid, color = premultiply(color), box = {x, y, w, h}})
 	return true
 }
+
 add_buffer :: proc(n: ^Node, s: paint.Surface, x, y, w, h: i32) -> bool {
 	b := wrap(s)
 	fmt.printf(
@@ -71,10 +83,10 @@ add_buffer :: proc(n: ^Node, s: paint.Surface, x, y, w, h: i32) -> bool {
 	append(&n.parts, Part{kind = .Raster, pixels = b, box = {x, y, w, h}})
 	return true
 }
+
 destroy :: proc(n: ^Node) {
 	if n == nil {return}
 	for b in n.buffers {
-		if b.texture != nil {wlr.texture_destroy(b.texture)}
 		wlr.wlr_buffer_unlock(&b.base)
 	}
 	delete(n.buffers)
@@ -88,7 +100,9 @@ create :: proc(command: layout.Command, fonts: ^paint.Fonts, scale: f32 = 1) -> 
 	n.command = owned_copy(command)
 	n.scale = scale
 	ok := false
-	defer {if !ok {destroy(n)}}
+	defer {
+		if !ok {destroy(n)}
+	}
 	w, h := max(0, i32(command.box.width)), max(0, i32(command.box.height))
 	dw, dh := device_span(i32(command.box.x), w, scale), device_span(i32(command.box.y), h, scale)
 	if square(command) {
@@ -106,8 +120,10 @@ create :: proc(command: layout.Command, fonts: ^paint.Fonts, scale: f32 = 1) -> 
 			case layout.Rectangle:
 				s, valid := paint.create(dw, dh)
 				if !valid {return nil, false}
-				if !paint.shape(s, v.color, scale_radii(v.radii, scale), dw, dh) {paint.destroy(s)
-					return nil, false}
+				if !paint.shape(s, v.color, scale_radii(v.radii, scale), dw, dh) {
+					paint.destroy(s)
+					return nil, false
+				}
 				if !add_buffer(n, s, 0, 0, w, h) {return nil, false}
 			case layout.Image:
 				if v.usable {
@@ -115,29 +131,19 @@ create :: proc(command: layout.Command, fonts: ^paint.Fonts, scale: f32 = 1) -> 
 					   v.entry.surface.handle == nil {return nil, false}
 					s, valid := paint.create(dw, dh)
 					if !valid {return nil, false}
-					if !paint.image(
-						s,
-						v.entry.surface,
-						v.color,
-						scale_radii(v.radii, scale),
-					) {paint.destroy(s)
-						return nil, false}
+					if !paint.image(s, v.entry.surface, v.color, scale_radii(v.radii, scale)) {
+						paint.destroy(s)
+						return nil, false
+					}
 					if !add_buffer(n, s, 0, 0, w, h) {return nil, false}
 				}
 			case layout.Text:
 				s, valid := paint.create(dw, dh)
 				if !valid {return nil, false}
-				if !paint.text(
-					s,
-					fonts,
-					v.value,
-					v.font,
-					v.size,
-					v.color,
-					device_span(i32(command.box.x), v.ellipsis, scale),
-					scale,
-				) {paint.destroy(s)
-					return nil, false}
+				if !paint.text( s, fonts, v.value, v.font, v.size, v.color, device_span(i32(command.box.x), v.ellipsis, scale), scale, ) {
+					paint.destroy(s)
+					return nil, false
+				}
 				if !add_buffer(n, s, 0, 0, w, h) {return nil, false}
 			case layout.Border:
 				if !border(n, v, w, h) {return nil, false}
@@ -193,33 +199,28 @@ border :: proc(n: ^Node, v: layout.Border, w, h: i32) -> bool {
 			device_span(oy + y, th, n.scale),
 		)
 		if !valid {return false}
-		if !paint.shape(
-			s,
-			v.color,
-			scale_radii(r, n.scale),
-			dw,
-			dh,
-			dx,
-			dy,
-			true,
-			scale_widths(bw, n.scale),
-		) {paint.destroy(s)
-			return false}
+		if !paint.shape( s, v.color, scale_radii(r, n.scale), dw, dh, dx, dy, true, scale_widths(bw, n.scale), ) {
+			paint.destroy(s)
+			return false
+		}
 		if !add_buffer(n, s, x, y, tw, th) {return false}
 	}
 	return true
 }
 
 // Match scene scaling: a span is the difference of its rounded device edges.
-device_edge :: proc(origin: i32, scale: f32) -> i32 {return i32(math.round(f32(origin) * scale))}
-device_span :: proc(origin, length: i32, scale: f32) -> i32 {return(
-		device_edge(origin + length, scale) -
-		device_edge(origin, scale) \
-	)}
-phase :: proc(origin: f32, scale: f32) -> f64 {return(
-		f64(device_edge(i32(origin), scale)) -
-		f64(i32(origin)) * f64(scale) \
-	)}
+device_edge :: proc(origin: i32, scale: f32) -> i32 {
+	return i32(math.round(f32(origin) * scale))
+}
+
+device_span :: proc(origin, length: i32, scale: f32) -> i32 {
+	return device_edge(origin + length, scale) - device_edge(origin, scale)
+}
+
+phase :: proc(origin: f32, scale: f32) -> f64 {
+	return f64(device_edge(i32(origin), scale)) - f64(i32(origin)) * f64(scale)
+}
+
 reusable :: proc(n: ^Node, c: layout.Command, scale: f32) -> bool {
 	return(
 		equal_content(n.command, c) &&
@@ -228,15 +229,11 @@ reusable :: proc(n: ^Node, c: layout.Command, scale: f32) -> bool {
 		phase(n.command.box.y, scale) == phase(c.box.y, scale) \
 	)
 }
-scale_radii :: proc(r: paint.Radii, scale: f32) -> paint.Radii {return {
-		r.tl * scale,
-		r.tr * scale,
-		r.bl * scale,
-		r.br * scale,
-	}}
-scale_widths :: proc(w: paint.Widths, scale: f32) -> paint.Widths {return {
-		w.left * scale,
-		w.right * scale,
-		w.top * scale,
-		w.bottom * scale,
-	}}
+
+scale_radii :: proc(r: paint.Radii, scale: f32) -> paint.Radii {
+	return {r.tl * scale, r.tr * scale, r.bl * scale, r.br * scale}
+}
+
+scale_widths :: proc(w: paint.Widths, scale: f32) -> paint.Widths {
+	return {w.left * scale, w.right * scale, w.top * scale, w.bottom * scale}
+}

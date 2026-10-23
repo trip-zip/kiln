@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Compare committed headless frames, keeping logs and every differing pixel."""
+# Uses GLES for the baseline; the branch owns its renderer and ignores WLR_RENDERER.
 # Requires Pillow (PIL).
 import argparse
 import json
@@ -71,7 +72,7 @@ def capture(binary, destination, scale, image):
                XDG_CACHE_HOME=str(destination / 'cache'),
                XDG_DATA_HOME=str(destination / 'data'),
                DBUS_SESSION_BUS_ADDRESS=f'unix:path={runtime}/absent',
-               WLR_BACKENDS='headless', WLR_RENDERER='pixman',
+               WLR_BACKENDS='headless', WLR_RENDERER='gles2',
                SCENE_IMAGE=str(image))
     logfile = destination / 'kiln.log'
     with logfile.open('w') as log:

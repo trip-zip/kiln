@@ -12,19 +12,23 @@ Surface_Events :: struct {
 	commit, map_, unmap, destroy: wl.Listener,
 	needed, entered, visible:     bool,
 }
+
 Subscription_Context :: struct {
 	output: ^Output,
 	id:     u32,
 }
+
 subscribe :: proc "c" (surface: ^wlr.Surface, x, y: i32, data: rawptr) {
 	context = runtime.default_context()
 	args := (^Subscription_Context)(data)
 	o := args.output
 	context.allocator = o.scene.allocator
 	for e in o.subscriptions {
-		if e.surface == surface {e.needed = true
+		if e.surface == surface {
+			e.needed = true
 			e.id = args.id
-			return}
+			return
+		}
 	}
 	e := new(Surface_Events)
 	e.output, e.surface, e.needed = o, surface, true
@@ -35,6 +39,7 @@ subscribe :: proc "c" (surface: ^wlr.Surface, x, y: i32, data: rawptr) {
 	wl.listen(&surface.events.unmap, &e.unmap, surface_unmapped)
 	wl.listen(&surface.events.destroy, &e.destroy, surface_destroyed)
 }
+
 refresh_subscriptions :: proc(o: ^Output) {
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
 	if o.scene == nil {return}
@@ -44,12 +49,19 @@ refresh_subscriptions :: proc(o: ^Output) {
 		args := Subscription_Context{o, p.id}
 		wlr.surface_known(p.surface, subscribe, &args)
 		positions := current_surfaces(p)
-		for v in positions {if v.popup {wlr.surface_known(v.surface, subscribe, &args)}}
+		for v in positions {
+			if v.popup {wlr.surface_known(v.surface, subscribe, &args)}
+		}
+	}
+	if o.cursor.surface != nil {
+		args := Subscription_Context{o, 0}
+		subscribe(o.cursor.surface, 0, 0, &args)
 	}
 	for i := len(o.subscriptions) - 1; i >= 0; i -= 1 {
 		if !o.subscriptions[i].needed {unsubscribe(o.subscriptions[i])}
 	}
 }
+
 surface_visibility :: proc(e: ^Surface_Events, visible: bool) {
 	if e.entered == visible {return}
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
@@ -67,6 +79,7 @@ surface_visibility :: proc(e: ^Surface_Events, visible: bool) {
 	}
 	wlr.surface_density(e.surface, outputs[:])
 }
+
 unsubscribe :: proc(e: ^Surface_Events) {
 	context.allocator = e.output.scene.allocator
 	surface_visibility(e, false)
@@ -75,14 +88,21 @@ unsubscribe :: proc(e: ^Surface_Events) {
 	wl.unlisten(&e.unmap)
 	wl.unlisten(&e.destroy)
 	for other, i in e.output.subscriptions {
-		if other == e {ordered_remove(&e.output.subscriptions, i)
-			break}
+		if other == e {
+			ordered_remove(&e.output.subscriptions, i)
+			break
+		}
 	}
 	free(e)
 }
+
 changed_surface :: proc(e: ^Surface_Events) {
 	o := e.output
 	context.allocator = o.scene.allocator
+	if o.cursor.surface == e.surface {
+		damage_box(o, o.cursor.device_box)
+		return
+	}
 	// Old popup coverage belongs to its containing part, even after an unmap.
 	for &p in o.parts {
 		if p.kind != .Client || p.id != e.id {continue}
@@ -91,18 +111,23 @@ changed_surface :: proc(e: ^Surface_Events) {
 	}
 	refresh_subscriptions(o)
 }
+
 surface_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
-	changed_surface(wl.owner(listener, Surface_Events, "commit"))
+	e := wl.owner(listener, Surface_Events, "commit")
+	changed_surface(e)
 }
+
 surface_mapped :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	changed_surface(wl.owner(listener, Surface_Events, "map_"))
 }
+
 surface_unmapped :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	changed_surface(wl.owner(listener, Surface_Events, "unmap"))
 }
+
 surface_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	e := wl.owner(listener, Surface_Events, "destroy")

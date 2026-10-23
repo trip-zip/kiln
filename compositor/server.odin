@@ -11,6 +11,7 @@ import "base:runtime"
 import "core:fmt"
 import "core:os"
 import "core:sys/linux"
+import "../gles"
 
 Server :: struct {
 	screenshot_seq:                                                                       u64,
@@ -46,6 +47,10 @@ Server :: struct {
 	session:                                                                              ^wlr.wlr_session,
 	session_active, session_destroy:                                                      wl.Listener,
 	renderer:                                                                             ^wlr.wlr_renderer,
+	gles:                                                                                 ^gles.Renderer,
+	cursor_surface:                                                                       ^wlr.wlr_surface,
+	cursor_hx, cursor_hy:                                                                 i32,
+	cursor_surface_destroy, cursor_surface_commit:                                        wl.Listener,
 	allocator:                                                                            ^wlr.wlr_allocator,
 	scene:                                                                                ^sp.Scene,
 	gamma:                                                                                ^wlr.wlr_gamma_control_manager_v1,
@@ -182,6 +187,8 @@ destroy :: proc(s: ^Server) {
 		s.keyboard_grabbed,
 		s.pointer_grabbed,
 	)
+	wl.unlisten(&s.cursor_surface_destroy)
+	wl.unlisten(&s.cursor_surface_commit)
 	if s.cursor_manager != nil {wlr.wlr_xcursor_manager_destroy(s.cursor_manager)}
 	if s.cursor_name != nil {delete(s.cursor_name, s.cursor_name_allocator)}
 	if s.cursor != nil {wlr.wlr_cursor_destroy(s.cursor)}
@@ -189,6 +196,7 @@ destroy :: proc(s: ^Server) {
 	if s.layout != nil {wlr.wlr_output_layout_destroy(s.layout)}
 	if s.allocator != nil {wlr.wlr_allocator_destroy(s.allocator)}
 	if s.renderer != nil {wlr.wlr_renderer_destroy(s.renderer)}
+	gles.destroy(s.gles)
 	if s.display != nil {wl.destroy(s.display)}
 	wl.unlisten(&s.new_lock)
 	delete(s.lock_surfaces)
@@ -238,7 +246,9 @@ run :: proc(startup_command := "") -> bool {
 	if !wlr.wlr_renderer_init_wl_display(s.renderer, s.display) {return false}
 	s.allocator = wlr.wlr_allocator_autocreate(s.backend, s.renderer)
 	if s.allocator == nil {return false}
-	compositor := wlr.wlr_compositor_create(s.display, 5, s.renderer)
+	s.gles = gles.create(wlr.backend_fd(s.backend))
+	if s.gles == nil {return false}
+	compositor := wlr.wlr_compositor_create(s.display, 5, nil)
 	if compositor == nil {return false}
 	if wlr.wlr_subcompositor_create(s.display) == nil {return false}
 	if !wlr.density_protocols_create(s.display) {return false}
@@ -250,6 +260,7 @@ run :: proc(startup_command := "") -> bool {
 	if wlr.wlr_xdg_output_manager_v1_create(s.display, s.layout) == nil {return false}
 	s.scene = sp.scene_create()
 	if s.scene == nil {return false}
+	sp.attach_compositor(s.scene, compositor, s.gles)
 	s.gamma = wlr.gamma_create(s.display)
 	if s.gamma == nil {return false}
 	sp.set_gamma_manager(s.scene, s.gamma)

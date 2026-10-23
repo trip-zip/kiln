@@ -45,6 +45,7 @@ fixture_surface :: proc(s: ^wlr.Surface) {
 		wl.init(&signal.listener_list)
 	}
 }
+
 @(test)
 current_subsurface_order_and_desynchronized_damage :: proc(t: ^testing.T) {
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
@@ -106,10 +107,10 @@ client_hit_resolves_current_subsurfaces_without_raster_picking :: proc(t: ^testi
 	parent, child: wlr.Surface
 	fixture_surface(&parent)
 	fixture_surface(&child)
-	testing.expect(t, wlr.clip_begin(&parent.input_region, []wlr.Box{{0, 0, 80, 60}}))
-	testing.expect(t, wlr.clip_begin(&child.input_region, []wlr.Box{{0, 0, 20, 20}}))
-	defer wlr.clip_finish(&parent.input_region)
-	defer wlr.clip_finish(&child.input_region)
+	testing.expect(t, test_region_begin(&parent.input_region, []wlr.Box{{0, 0, 80, 60}}))
+	testing.expect(t, test_region_begin(&child.input_region, []wlr.Box{{0, 0, 20, 20}}))
+	defer test_region_finish(&parent.input_region)
+	defer test_region_finish(&child.input_region)
 	sub := wlr.wlr_subsurface {
 		surface = &child,
 		current = {x = 10, y = 15},
@@ -138,8 +139,8 @@ later_parts_cannot_occlude_client_popups :: proc(t: ^testing.T) {
 	fixture_surface(&popup_surface)
 	fixture_surface(&later)
 	for surface in ([]^wlr.Surface{&parent, &popup_surface, &later}) {
-		testing.expect(t, wlr.clip_begin(&surface.input_region, []wlr.Box{{0, 0, 80, 60}}))
-		defer wlr.clip_finish(&surface.input_region)
+		testing.expect(t, test_region_begin(&surface.input_region, []wlr.Box{{0, 0, 80, 60}}))
+		defer test_region_finish(&surface.input_region)
 	}
 	base := wlr.wlr_xdg_surface {
 		surface = &popup_surface,
@@ -223,9 +224,9 @@ reacquired_buffer_repaints_only_damage_since_presentation :: proc(t: ^testing.T)
 	testing.expect_value(t, boxes[1], box2)
 	testing.expect_value(t, boxes[2], box3)
 	// Check the actual pass clip point by point, including the gap between rectangles.
-	region: wlr.Region
-	testing.expect(t, wlr.clip_begin(&region, boxes[:]))
-	defer wlr.clip_finish(&region)
+	region: wlr.pixman_region32_t
+	testing.expect(t, test_region_begin(&region, boxes[:]))
+	defer test_region_finish(&region)
 	surface: wlr.Surface
 	fixture_surface(&surface)
 	surface.input_region = region
@@ -250,4 +251,19 @@ reacquired_buffer_repaints_only_damage_since_presentation :: proc(t: ^testing.T)
 	raw.wl_signal_emit_mutable(&a.events.destroy, &a)
 	testing.expect_value(t, len(o.history), 1)
 	testing.expect(t, wl.empty(&a.events.destroy.listener_list))
+}
+
+foreign import test_pixman "system:pixman-1"
+foreign test_pixman {
+	@(link_name = "pixman_region32_init_rects")
+	test_region_init :: proc(region: ^wlr.pixman_region32_t, boxes: [^]wlr.pixman_box32_t, count: i32) -> i32 ---
+	@(link_name = "pixman_region32_fini")
+	test_region_finish :: proc(region: ^wlr.pixman_region32_t) ---
+}
+
+test_region_begin :: proc(region: ^wlr.pixman_region32_t, boxes: []wlr.Box) -> bool {
+	rects := make([]wlr.pixman_box32_t, len(boxes))
+	defer delete(rects)
+	for b, i in boxes {rects[i] = {b.x, b.y, b.x + b.width, b.y + b.height}}
+	return test_region_init(region, raw_data(rects), i32(len(rects))) != 0
 }

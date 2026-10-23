@@ -3,22 +3,37 @@ package scene_paint
 import wl "../wayland"
 import wlr "../wlroots"
 import "base:runtime"
+import "../gles"
 
 DRAG_ICON_ID :: u32(0xffffffff)
 
 Scene :: struct {
+	renderer:                     ^gles.Renderer,
+	sources:                      map[^wlr.Surface]^Source,
+	new_surface:                  wl.Listener,
 	allocator:                    runtime.Allocator,
 	outputs:                      [dynamic]^Output,
 	gamma:                        ^wlr.wlr_gamma_control_manager_v1,
 	gamma_changed, gamma_destroy: wl.Listener,
 }
+
 scene_create :: proc() -> ^Scene {
 	s := new(Scene)
 	s.allocator = context.allocator
+	s.sources = make(map[^wlr.Surface]^Source)
 	return s
 }
+
 scene_destroy :: proc(s: ^Scene) {
 	context.allocator = s.allocator
+	wl.unlisten(&s.new_surface)
+	for len(s.sources) > 0 {
+		for _, source in s.sources {
+			source_remove(source)
+			break
+		}
+	}
+	delete(s.sources)
 	wl.unlisten(&s.gamma_changed)
 	wl.unlisten(&s.gamma_destroy)
 	delete(s.outputs)
@@ -40,12 +55,14 @@ publish :: proc(o: ^Output, parts: []Part) -> u64 {
 	refresh_subscriptions(o)
 	return mutations
 }
+
 find_client :: proc(o: ^Output, id: u32) -> (Part, bool) {
 	for p in o.parts {
 		if p.kind == .Client && p.id == id {return p, true}
 	}
 	return {}, false
 }
+
 remove_client :: proc(o: ^Output, id: u32) {
 	for i := len(o.parts) - 1; i >= 0; i -= 1 {
 		if o.parts[i].kind == .Client && o.parts[i].id == id {
@@ -54,6 +71,7 @@ remove_client :: proc(o: ^Output, id: u32) {
 		}
 	}
 }
+
 intersection :: proc(a, b: wlr.Box) -> wlr.Box {
 	x, y := max(a.x, b.x), max(a.y, b.y)
 	return {
@@ -63,6 +81,7 @@ intersection :: proc(a, b: wlr.Box) -> wlr.Box {
 		max(0, min(a.y + a.height, b.y + b.height) - y),
 	}
 }
+
 contains :: proc(box: wlr.Box, x, y: f64) -> bool {
 	return(
 		x >= f64(box.x) &&
@@ -71,11 +90,13 @@ contains :: proc(box: wlr.Box, x, y: f64) -> bool {
 		y < f64(box.y + box.height) \
 	)
 }
+
 Surface_Position :: struct {
 	surface: ^wlr.Surface,
 	x, y:    i32,
 	popup:   bool,
 }
+
 collect_surface :: proc "c" (surface: ^wlr.Surface, x, y: i32, data: rawptr) {
 	context = runtime.default_context()
 	append((^[dynamic]Surface_Position)(data), Surface_Position{surface = surface, x = x, y = y})
@@ -104,6 +125,7 @@ Draw_Item :: struct {
 	part:     Part,
 	position: Surface_Position,
 }
+
 draw_order :: proc(o: ^Output) -> [dynamic]Draw_Item {
 	items := make([dynamic]Draw_Item, context.temp_allocator)
 	for popups in ([2]bool{false, true}) {
@@ -120,6 +142,7 @@ draw_order :: proc(o: ^Output) -> [dynamic]Draw_Item {
 	}
 	return items
 }
+
 client_at :: proc(o: ^Output, x, y: f64) -> (surface: ^wlr.Surface, id: u32, sx, sy: f64) {
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
 	for popups in ([2]bool{true, false}) {

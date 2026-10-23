@@ -4,11 +4,12 @@ import paint "../paint"
 import wlr "../wlroots"
 import "base:runtime"
 import "core:c"
+import "../gles"
 
 Buffer :: struct {
 	base:                           wlr.wlr_buffer,
 	surface:                        paint.Surface,
-	texture:                        ^wlr.Texture,
+	texture:                        ^gles.Texture,
 	allocator:                      runtime.Allocator,
 	source_x, source_y:             i32,
 	source_scale_x, source_scale_y: f64,
@@ -20,15 +21,18 @@ buffer_impl := wlr.wlr_buffer_impl {
 	begin_data_ptr_access = buffer_access,
 	end_data_ptr_access   = buffer_end,
 }
+
 buffer_destroy :: proc "c" (base: ^wlr.wlr_buffer) {
 	context = runtime.default_context()
 	b := (^Buffer)(base)
 	context.allocator = b.allocator
+	wlr.buffer_finish(base)
 	live_buffers -= 1
 	live_bytes -= u64(b.surface.stride) * u64(b.surface.height)
 	paint.destroy(b.surface)
 	free(b)
 }
+
 buffer_access :: proc "c" (
 	base: ^wlr.wlr_buffer,
 	flags: u32,
@@ -44,7 +48,11 @@ buffer_access :: proc "c" (
 	stride^ = c.size_t(b.surface.stride)
 	return true
 }
-buffer_end :: proc "c" (base: ^wlr.wlr_buffer) {context = runtime.default_context()}
+
+buffer_end :: proc "c" (base: ^wlr.wlr_buffer) {
+	context = runtime.default_context()
+}
+
 wrap :: proc(surface: paint.Surface) -> ^Buffer {
 	b := new(Buffer)
 	b.surface, b.allocator = surface, context.allocator

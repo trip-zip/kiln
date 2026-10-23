@@ -8,6 +8,7 @@ Kind :: enum {
 	Raster,
 	Client,
 }
+
 Part :: struct {
 	box:               wlr.Box,
 	kind:              Kind,
@@ -73,4 +74,47 @@ placed :: proc(part: Part, command: layout.Command) -> Part {
 	p.box.y += i32(command.box.y)
 	p.key = key(command)
 	return p
+}
+
+// Scissors must be disjoint or translucent parts blend twice in the overlap.
+repaint_union :: proc(boxes: []wlr.Box, bounds: wlr.Box) -> [dynamic]wlr.Box {
+	result := make([dynamic]wlr.Box, context.temp_allocator)
+	for box in boxes {
+		b := intersection(box, bounds)
+		if b.width <= 0 || b.height <= 0 {continue}
+		pending := make([dynamic]wlr.Box, context.temp_allocator)
+		append(&pending, b)
+		for covered in result {
+			next := make([dynamic]wlr.Box, context.temp_allocator)
+			for p in pending {
+				overlap := intersection(p, covered)
+				if overlap.width <= 0 || overlap.height <= 0 {
+					append(&next, p)
+					continue
+				}
+				candidates := [4]wlr.Box {
+					{p.x, p.y, p.width, overlap.y - p.y},
+					{
+						p.x,
+						overlap.y + overlap.height,
+						p.width,
+						p.y + p.height - overlap.y - overlap.height,
+					},
+					{p.x, overlap.y, overlap.x - p.x, overlap.height},
+					{
+						overlap.x + overlap.width,
+						overlap.y,
+						p.x + p.width - overlap.x - overlap.width,
+						overlap.height,
+					},
+				}
+				for c in candidates {
+					if c.width > 0 && c.height > 0 {append(&next, c)}
+				}
+			}
+			pending = next
+		}
+		append(&result, ..pending[:])
+	}
+	return result
 }

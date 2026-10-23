@@ -13,6 +13,7 @@ enable_output :: proc(
 	output: ^wlr.wlr_output,
 	allocator: ^wlr.wlr_allocator,
 	renderer: ^wlr.wlr_renderer,
+	paint: ^sp.Output,
 ) -> bool {
 	if !wlr.wlr_output_init_render(output, allocator, renderer) {return false}
 	state: wlr.wlr_output_state
@@ -22,7 +23,10 @@ enable_output :: proc(
 	if mode := wlr.wlr_output_preferred_mode(output); mode != nil {
 		wlr.wlr_output_state_set_mode(&state, mode)
 	}
-	return wlr.wlr_output_commit_state(output, &state)
+	width, height := output.width, output.height
+	if mode := wlr.wlr_output_preferred_mode(output); mode != nil {width, height = mode.width, mode.height}
+	if !sp.prepare_output(paint, &state, width, height) {return false}
+	return sp.commit_target(paint, &state)
 }
 
 Output :: struct {
@@ -56,11 +60,14 @@ output_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	s := wl.owner(listener, Server, "new_output")
 	handle := (^wlr.wlr_output)(data)
 	fixture_name_output(handle)
-	if !enable_output(handle, s.allocator, s.renderer) {
+	output := new(Output)
+	output.paint.handle, output.paint.renderer = handle, s.gles
+	if !enable_output(handle, s.allocator, s.renderer, &output.paint) {
+		sp.output_finish(&output.paint)
+		free(output)
 		fail(s, "Failed to enable output")
 		return
 	}
-	output := new(Output)
 	output.server, output.handle = s, handle
 	s.next_output += 1
 	output.lifetime = s.next_output
@@ -68,6 +75,7 @@ output_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	if !layout.init(&output.ui) {
 		layout.destroy(&output.ui)
 		clear_chrome(output)
+		sp.output_finish(&output.paint)
 		free(output)
 		fail(s, "Failed to create output layout")
 		return
@@ -78,7 +86,8 @@ output_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	wl.listen(&handle.events.request_state, &output.request_state, output_request_state)
 	wl.listen(&handle.events.destroy, &output.destroy, output_destroy)
 	layout_output := wlr.wlr_output_layout_add_auto(s.layout, handle)
-	sp.output_init(&output.paint, s.scene, handle, s.renderer, s.layout)
+	sp.output_init(&output.paint, s.scene, handle, s.gles, s.layout)
+	cursor_sync(s)
 	if layout_output == nil {
 		fail(s, "Failed to add output to scene")
 		return
@@ -99,11 +108,17 @@ output_frame :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	output := wl.owner(listener, Output, "frame")
 	if !output.handle.enabled {return}
-	if !wlr.session_active(output.server.session) {output.dirty = true
-		return}
-	if !arrange(output) {fail(output.server, "Failed to arrange output")
-		return}
+	if !wlr.session_active(output.server.session) {
+		output.dirty = true
+		return
+	}
+	if !arrange(output) {
+		fail(output.server, "Failed to arrange output")
+		return
+	}
 	scene_output := sp.get_scene_output(output.server.scene, output.handle)
+	sp.output_sync(scene_output)
+	cursor_sync(output.server)
 	if locked(output.server) && !output.lock_submitted {sp.output_invalidate(scene_output)}
 	if locked(output.server) && !output.lock_submitted {
 		output.lock_submitted = true
@@ -138,8 +153,10 @@ output_destroy :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	wl.unlisten(&output.destroy)
 	s := output.server
 	for other, i in s.outputs {
-		if other == output {ordered_remove(&s.outputs, i)
-			break}
+		if other == output {
+			ordered_remove(&s.outputs, i)
+			break
+		}
 	}
 	remove_layer_output(s, output)
 	for view in s.views {
@@ -170,6 +187,7 @@ Output_Facts :: struct {
 	enabled:                                                   bool,
 	physical_width, physical_height, transform, adaptive_sync: i32,
 }
+
 output_facts :: proc(output: ^Output) -> Output_Facts {
 	w := output.handle
 	box: wlr.wlr_box
@@ -188,6 +206,7 @@ output_facts :: proc(output: ^Output) -> Output_Facts {
 		w.adaptive_sync_status,
 	}
 }
+
 update_output_facts :: proc(output: ^Output) {
 	if !output.discovered {return}
 	facts := output_facts(output)
@@ -200,15 +219,19 @@ update_output_facts :: proc(output: ^Output) {
 				if s.focused != nil && s.focused.output == output {clear_focus(s)}
 				for l in s.layers {
 					if l.output == output &&
-					   l.handle.surface == s.seat.keyboard_state.focused_surface {clear_focus(s)
-						break}
+					   l.handle.surface == s.seat.keyboard_state.focused_surface {
+						clear_focus(s)
+						break
+					}
 				}
 				pointer_target_refresh(s)
 			}
 		}
 		output.facts = facts
-		if locked(output.server) {output.lock_submitted = false
-			output.lock_presented = false}
+		if locked(output.server) {
+			output.lock_submitted = false
+			output.lock_presented = false
+		}
 		lock_cover(output.server)
 		lock_focus(output.server)
 		lock_maybe_ack(output.server)
@@ -224,14 +247,37 @@ commit_output :: proc(
 	state: ^wlr.wlr_output_state,
 	commit: type_of(wlr.wlr_output_commit_state) = wlr.wlr_output_commit_state,
 ) -> bool {
+	// Mode and enable commits must carry our buffer to bypass wlroots rendering.
+	if output.paint.renderer != nil && state.buffer == nil &&
+	   (state.committed & wlr.WLR_OUTPUT_STATE_ENABLED == 0 || state.enabled) {
+		width, height := output.handle.width, output.handle.height
+		if state.committed & wlr.WLR_OUTPUT_STATE_MODE != 0 {
+			if state.mode_type == wlr.WLR_OUTPUT_STATE_MODE_FIXED && state.mode != nil {
+				width, height = state.mode.width, state.mode.height
+			} else {
+				width, height = state.custom_mode.width, state.custom_mode.height
+			}
+		}
+		if output.paint.last != nil && output.paint.last.width == width &&
+		   output.paint.last.height == height {
+			wlr.output_buffer(state, output.paint.last)
+		} else if !sp.prepare_output(&output.paint, state, width, height) {
+			return false
+		}
+	}
 	before := output.notices
 	if !commit(output.handle, state) {
+		if state.buffer != nil {
+			b := sp.target_buffer(state.buffer)
+			fmt.eprintf("GLES commit failed: format 0x%x modifier 0x%x\n", b.format, b.modifier)
+		}
 		fmt.eprintf("Output %s rejected requested state\n", output.handle.name)
 		return false
 	}
 	output_accepted(output, before)
 	return true
 }
+
 output_accepted :: proc(output: ^Output, before: u64) {
 	if output.notices == before {
 		output.notices += 1
@@ -239,14 +285,14 @@ output_accepted :: proc(output: ^Output, before: u64) {
 	}
 	dirty(output)
 }
+
 runtime_output_set :: proc(data: rawptr, name: string, change: vm.Output_Change) {
 	s := (^Server)(data)
 	for o in s.outputs {
 		if string(o.handle.name) != name {continue}
 		if p, ok := change.(vm.Output_Position); ok {
 			before := o.notices
-			if wlr.wlr_output_layout_add(s.layout, o.handle, p.x, p.y) !=
-			   nil {output_accepted(o, before)}
+			if wlr.wlr_output_layout_add(s.layout, o.handle, p.x, p.y) != nil {output_accepted(o, before)}
 			return
 		}
 		state: wlr.wlr_output_state
@@ -258,11 +304,12 @@ runtime_output_set :: proc(data: rawptr, name: string, change: vm.Output_Change)
 			it := wl.iterate(&o.handle.modes)
 			for link, ok := wl.next(&it); ok; link, ok = wl.next(&it) {
 				m := runtime.container_of(link, wlr.wlr_output_mode, "link")
-				if mode_matches(m, c) {match = m
-					break}
+				if mode_matches(m, c) {
+					match = m
+					break
+				}
 			}
-			if match !=
-			   nil {wlr.wlr_output_state_set_mode(&state, match)} else {wlr.wlr_output_state_set_custom_mode(&state, c.width, c.height, c.refresh)}
+			if match != nil {wlr.wlr_output_state_set_mode(&state, match)} else {wlr.wlr_output_state_set_custom_mode(&state, c.width, c.height, c.refresh)}
 		case vm.Output_Scale:
 			wlr.wlr_output_state_set_scale(&state, c.value)
 		case vm.Output_Enabled:
@@ -285,6 +332,7 @@ runtime_output_set :: proc(data: rawptr, name: string, change: vm.Output_Change)
 		return
 	}
 }
+
 mode_matches :: proc(m: ^wlr.wlr_output_mode, wanted: vm.Output_Mode) -> bool {
 	return(
 		m.width == wanted.width &&
@@ -292,10 +340,12 @@ mode_matches :: proc(m: ^wlr.wlr_output_mode, wanted: vm.Output_Mode) -> bool {
 		(wanted.refresh == 0 || m.refresh == wanted.refresh) \
 	)
 }
+
 output_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	update_output_facts(wl.owner(listener, Output, "commit"))
 }
+
 output_layout_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	s := wl.owner(listener, Server, "layout_change")
@@ -303,7 +353,9 @@ output_layout_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 }
 
 output_commit_failed :: proc(output: ^Output) {
-	if !wlr.session_active(output.server.session) {output.dirty = true
-		return}
+	if !wlr.session_active(output.server.session) {
+		output.dirty = true
+		return
+	}
 	fail(output.server, "Failed to commit output frame")
 }

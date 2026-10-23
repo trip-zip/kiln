@@ -60,7 +60,7 @@ wlr_output :: struct #align(8) {
     commit_seq: u32,
 	events: wlr_output_events,
 	_opaque_352: [104]u8,
-    swapchain: ^wlr_swapchain,
+    swapchain:            rawptr,
     _opaque_464: [160]u8,
 }
 #assert(size_of(wlr_output) == 624 && align_of(wlr_output) == 8)
@@ -70,10 +70,29 @@ wlr_output :: struct #align(8) {
 #assert(offset_of(wlr_output, enabled) == 148 && offset_of(wlr_output, scale) == 152)
 #assert(offset_of(wlr_output, transform) == 160 && offset_of(wlr_output, adaptive_sync_status) == 164)
 
+WLR_OUTPUT_STATE_MODE :: u32(1 << 2)
+WLR_OUTPUT_STATE_ENABLED :: u32(1 << 3)
+wlr_output_state_mode_type :: enum c.int {
+ WLR_OUTPUT_STATE_MODE_FIXED,
+ WLR_OUTPUT_STATE_MODE_CUSTOM,
+}
+WLR_OUTPUT_STATE_MODE_FIXED :: wlr_output_state_mode_type.WLR_OUTPUT_STATE_MODE_FIXED
+WLR_OUTPUT_STATE_MODE_CUSTOM :: wlr_output_state_mode_type.WLR_OUTPUT_STATE_MODE_CUSTOM
+#assert(size_of(wlr_output_state_mode_type) == 4)
+
 wlr_output_state :: struct #align(8) {
-	_opaque_0: [56]u8,
+	committed:   u32,
+	_opaque_4:   [28]u8,
+	enabled:     bool,
+	_opaque_33:  [23]u8,
     buffer: ^wlr_buffer,
-    _opaque_64: [144]u8,
+    _opaque_64: [52]u8,
+	mode_type:   wlr_output_state_mode_type,
+	mode:        ^wlr_output_mode,
+	custom_mode: struct {
+		width, height, refresh: i32,
+	},
+	_opaque_140: [68]u8,
 }
 #assert(size_of(wlr_output_state) == 208 && align_of(wlr_output_state) == 8)
 
@@ -210,7 +229,9 @@ wlr_surface_events :: struct #align(8) {
 
 wlr_surface :: struct #align(8) {
 	resource: ^wl.wl_resource,
-	_opaque_8: [64]u8,
+	_opaque_8: [16]u8,
+	buffer_damage: pixman_region32_t,
+	_opaque_48:    [24]u8,
 	input_region: pixman_region32_t,
 	current: wlr_surface_state,
 	_opaque_384: [304]u8,
@@ -220,7 +241,8 @@ wlr_surface :: struct #align(8) {
 	_opaque_808: [160]u8,
 }
 wlr_surface_state :: struct #align(8) {
-	_opaque_0: [16]u8,
+	_opaque_0: [8]u8,
+	buffer:                               ^wlr_buffer,
     dx,dy: i32,
     _opaque_24: [96]u8,
     transform, scale: i32,
@@ -477,3 +499,8 @@ wlr_output_layout :: struct #align(8) {
 
 #assert(offset_of(wlr_output,commit_seq)==188)
 #assert(offset_of(wlr_output_events,present)==80)
+
+#assert(offset_of(wlr_surface, buffer_damage) == 24 && offset_of(wlr_surface_state, buffer) == 8)
+
+#assert(offset_of(wlr_output_state, committed) == 0 && offset_of(wlr_output_state, enabled) == 32 && offset_of(wlr_output_state, buffer) == 56)
+#assert(offset_of(wlr_output_state, mode_type) == 116 && offset_of(wlr_output_state, mode) == 120 && offset_of(wlr_output_state, custom_mode) == 128)

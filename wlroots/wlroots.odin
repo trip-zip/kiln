@@ -22,13 +22,21 @@ wlr_output_mode :: struct {
 wlr_xdg_output_manager_v1 :: struct {}
 wlr_output_layout_output :: struct {}
 
-wlr_compositor :: struct {}
+wlr_compositor :: struct {
+	_opaque_0:  [16]u8,
+	events:     struct {
+		new_surface, destroy: wl.wl_signal,
+	},
+	_opaque_48: [48]u8,
+}
+#assert(size_of(wlr_compositor) == 96 && align_of(wlr_compositor) == 8 && offset_of(wlr_compositor, events) == 16)
 wlr_subcompositor :: struct {}
 wlr_data_device_manager :: struct {}
 wlr_screencopy_manager_v1 :: struct {}
 wlr_xcursor_manager :: struct {}
 wlr_xcursor :: struct #align(8) { image_count: u32, _pad: [4]u8, images: [^]^wlr_xcursor_image, name: cstring, _opaque: [8]u8 }
-wlr_xcursor_image :: struct #align(8) { width,height: u32, _opaque: [32]u8 }
+wlr_xcursor_image :: struct #align(8) { width,height, hotspot_x, hotspot_y, delay: u32,
+	buffer:                                     [^]u8, _opaque: [8]u8 }
 #assert(size_of(wlr_xcursor)==32 && align_of(wlr_xcursor)==8)
 #assert(offset_of(wlr_xcursor,image_count)==0 && offset_of(wlr_xcursor,images)==8 && offset_of(wlr_xcursor,name)==16)
 #assert(size_of(wlr_xcursor_image)==40 && align_of(wlr_xcursor_image)==8)
@@ -119,8 +127,8 @@ foreign lib {
 	wlr_pointer_from_input_device :: proc(device: ^wlr_input_device) -> ^wlr_pointer ---
 	wlr_cursor_attach_input_device :: proc(cursor: ^wlr_cursor, device: ^wlr_input_device) ---
 	wlr_cursor_move :: proc(cursor: ^wlr_cursor, device: ^wlr_input_device, dx, dy: f64) ---
-	wlr_cursor_set_xcursor :: proc(cursor: ^wlr_cursor, manager: ^wlr_xcursor_manager, name: cstring) ---
-	wlr_cursor_set_surface :: proc(cursor: ^wlr_cursor, surface: ^wlr_surface, hotspot_x, hotspot_y: i32) ---
 	wlr_xcursor_manager_create :: proc(name: cstring, size: u32) -> ^wlr_xcursor_manager ---
 	wlr_xcursor_manager_destroy :: proc(manager: ^wlr_xcursor_manager) ---
 }
+
+#assert(offset_of(wlr_xcursor_image, hotspot_x) == 8 && offset_of(wlr_xcursor_image, hotspot_y) == 12 && offset_of(wlr_xcursor_image, buffer) == 24)

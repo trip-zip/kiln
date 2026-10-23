@@ -6,90 +6,102 @@ import "base:runtime"
 import "core:fmt"
 import "core:os"
 import "core:sys/posix"
+import "../gles"
 
 Output :: struct {
-	scene:                     ^Scene,
-	handle:                    ^wlr.wlr_output,
-	renderer:                  ^wlr.wlr_renderer,
-	layout:                    ^wlr.wlr_output_layout,
-	parts:                     [dynamic]Part,
-	damage:                    [dynamic]wlr.Box,
-	history:                   [dynamic]^Buffer_History,
-	last:                      ^wlr.Render_Buffer,
-	bounds:                    wlr.Box,
-	width, height, transform:  i32,
-	scale:                     f32,
-	damage_event, needs_frame: wl.Listener,
-	subscriptions:             [dynamic]^Surface_Events,
-	passes:                    u64,
-	trace:                     bool,
+	scene:                    ^Scene,
+	handle:                   ^wlr.wlr_output,
+	renderer:                 ^gles.Renderer,
+	layout:                   ^wlr.wlr_output_layout,
+	parts:                    [dynamic]Part,
+	damage:                   [dynamic]wlr.Box,
+	history:                  [dynamic]^Buffer_History,
+	last:                     ^wlr.Render_Buffer,
+	gamma:                    gles.Gamma,
+	gamma_dirty:              bool,
+	swapchain:                gles.Swapchain,
+	cursor:                   Cursor,
+	bounds:                   wlr.Box,
+	width, height, transform: i32,
+	scale:                    f32,
+	needs_frame:              wl.Listener,
+	subscriptions:            [dynamic]^Surface_Events,
+	passes:                   u64,
+	trace:                    bool,
 }
+
 output_init :: proc(
 	o: ^Output,
 	scene: ^Scene,
 	handle: ^wlr.wlr_output,
-	renderer: ^wlr.wlr_renderer,
+	renderer: ^gles.Renderer,
 	layout: ^wlr.wlr_output_layout,
 ) {
 	o.scene, o.handle, o.renderer, o.layout = scene, handle, renderer, layout
 	o.trace = os.get_env("KILN_PAINT_DEBUG", context.temp_allocator) == "1"
+	o.gamma_dirty = true
 	append(&scene.outputs, o)
-	wl.listen(&handle.events.damage, &o.damage_event, output_damaged)
 	wl.listen(&handle.events.needs_frame, &o.needs_frame, output_needed)
 	output_sync(o)
 }
+
 get_scene_output :: proc(scene: ^Scene, handle: ^wlr.wlr_output) -> ^Output {
-	for o in scene.outputs {if o.handle == handle {return o}}
+	for o in scene.outputs {
+		if o.handle == handle {return o}
+	}
 	return nil
 }
+
 output_finish :: proc(o: ^Output) {
+	gles.gamma_finish(&o.gamma)
+	cursor_finish(o)
 	for len(o.subscriptions) > 0 {unsubscribe(o.subscriptions[len(o.subscriptions) - 1])}
 	delete(o.subscriptions)
-	wl.unlisten(&o.damage_event)
 	wl.unlisten(&o.needs_frame)
 	if o.last != nil {wlr.buffer_release(o.last)}
+	gles.swapchain_finish(&o.swapchain)
 	delete(o.parts)
 	delete(o.damage)
 	for len(o.history) > 0 {history_remove(o.history[len(o.history) - 1])}
 	delete(o.history)
 	if o.scene != nil {
 		for other, i in o.scene.outputs {
-			if other == o {ordered_remove(&o.scene.outputs, i)
-				break}
+			if other == o {
+				ordered_remove(&o.scene.outputs, i)
+				break
+			}
 		}
 	}
 }
-output_damaged :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
-	output_invalidate(wl.owner(listener, Output, "damage_event"))
-}
+
 output_needed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	wlr.wlr_output_schedule_frame(wl.owner(listener, Output, "needs_frame").handle)
 }
+
 output_invalidate :: proc(o: ^Output) {
 	if o == nil {return}
 	damage_box(o, {0, 0, o.width, o.height})
 }
+
 damage_box :: proc(o: ^Output, box: wlr.Box) {
 	if box.width <= 0 || box.height <= 0 {return}
 	append(&o.damage, box)
 	if o.handle != nil && o.handle.enabled {wlr.wlr_output_schedule_frame(o.handle)}
 }
+
 output_sync :: proc(o: ^Output) {
 	b: wlr.Box
 	wlr.wlr_output_layout_get_box(o.layout, o.handle, &b)
 	h := o.handle
-	if o.bounds != b ||
-	   o.width != h.width ||
-	   o.height != h.height ||
-	   o.scale != h.scale ||
+	if o.bounds != b || o.width != h.width || o.height != h.height || o.scale != h.scale ||
 	   o.transform != h.transform {
 		o.bounds = b
 		o.width, o.height, o.scale, o.transform = h.width, h.height, h.scale, h.transform
 		output_invalidate(o)
 	}
 }
+
 output_box :: proc(o: ^Output, box: wlr.Box) -> wlr.Box {
 	b := wlr.Box {
 		device_edge(box.x, o.scale),
@@ -99,8 +111,9 @@ output_box :: proc(o: ^Output, box: wlr.Box) -> wlr.Box {
 	}
 	tw, th := o.width, o.height
 	if o.transform % 2 != 0 {tw, th = th, tw}
-	return wlr.transform_box(b, wlr.transform_invert(o.transform), tw, th)
+	return gles.transform_box(b, gles.transform_invert(o.transform), tw, th)
 }
+
 coverage :: proc(p: Part) -> wlr.Box {
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
 	box := p.box
@@ -115,10 +128,12 @@ coverage :: proc(p: Part) -> wlr.Box {
 	}
 	return box
 }
+
 damage_part :: proc(o: ^Output, p: Part) {
 	damage_box(o, output_box(o, p.coverage))
 	damage_box(o, output_box(o, coverage(p)))
 }
+
 client_damage :: proc(o: ^Output, id: u32) {
 	if o == nil {return}
 	for &p in o.parts {
@@ -131,8 +146,8 @@ client_damage :: proc(o: ^Output, id: u32) {
 
 draw_texture :: proc(
 	o: ^Output,
-	pass: ^wlr.Pass,
-	texture: ^wlr.Texture,
+	pass: ^gles.Pass,
+	texture: ^gles.Texture,
 	source: wlr.wlr_fbox,
 	box, clip: wlr.Box,
 	transform: i32,
@@ -145,40 +160,39 @@ draw_texture :: proc(
 		if b.width > 0 && b.height > 0 {append(&boxes, b)}
 	}
 	if len(boxes) == 0 {return true}
-	region: wlr.Region
-	if !wlr.clip_begin(&region, boxes[:]) {return false}
-	defer wlr.clip_finish(&region)
-	wlr.pass_texture(pass, texture, source, box, &region, transform)
+	gles.texture(pass, texture, source, box, boxes[:], transform)
 	return true
 }
+
 draw_parts :: proc(
 	o: ^Output,
-	pass: ^wlr.Pass,
-	clip: ^wlr.Region,
+	pass: ^gles.Pass,
 	repaint: []wlr.Box,
 	drawn: ^[dynamic]^wlr.Surface,
 ) -> bool {
-	transform := wlr.transform_invert(o.transform)
+	transform := gles.transform_invert(o.transform)
 	items := draw_order(o)
 	for item in items {
 		p := item.part
 		if p.kind == .Solid {
-			wlr.pass_rect(pass, output_box(o, p.box), p.color, clip)
+			gles.rect(pass, output_box(o, p.box), p.color, repaint)
 		} else if p.kind == .Raster {
 			b := p.pixels
-			if b.texture == nil {b.texture = wlr.texture_create(o.renderer, &b.base)}
+			if b.texture == nil {b.texture = gles.import_buffer(o.renderer, &b.base)}
 			if b.texture == nil {return false}
-			wlr.pass_texture(pass, b.texture, p.source, output_box(o, p.box), clip, transform)
+			gles.texture(pass, b.texture, p.source, output_box(o, p.box), repaint, transform)
 		} else {
 			v := item.position
-			texture := wlr.surface_texture(v.surface)
+			texture := surface_texture(o, v.surface)
 			if texture == nil {continue}
 			box := output_box(o, {v.x, v.y, v.surface.current.width, v.surface.current.height})
 			visible := box
 			if !v.popup {visible = intersection(box, output_box(o, p.box))}
 			visible = intersection(visible, {0, 0, o.width, o.height})
 			if visible.width <= 0 || visible.height <= 0 {continue}
-			for e in o.subscriptions {if e.surface == v.surface {e.visible = true}}
+			for e in o.subscriptions {
+				if e.surface == v.surface {e.visible = true}
+			}
 			painted := false
 			for damage in repaint {
 				b := intersection(damage, visible)
@@ -188,20 +202,11 @@ draw_parts :: proc(
 				}
 			}
 			if !painted {continue}
-			t := wlr.transform_compose(
-				wlr.transform_invert(v.surface.current.transform),
+			t := gles.transform_compose(
+				gles.transform_invert(v.surface.current.transform),
 				transform,
 			)
-			if !draw_texture(
-				o,
-				pass,
-				texture,
-				wlr.surface_source(v.surface),
-				box,
-				visible,
-				t,
-				repaint,
-			) {
+			if !draw_texture( o, pass, texture, wlr.surface_source(v.surface), box, visible, t, repaint, ) {
 				return false
 			}
 			append(drawn, v.surface)
@@ -209,6 +214,7 @@ draw_parts :: proc(
 	}
 	return true
 }
+
 output_commit :: proc(o: ^Output) -> bool {
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
 	context.allocator = o.scene.allocator
@@ -217,33 +223,41 @@ output_commit :: proc(o: ^Output) -> bool {
 	state: wlr.wlr_output_state
 	wlr.wlr_output_state_init(&state)
 	defer wlr.wlr_output_state_finish(&state)
-	buffer, acquired := wlr.output_acquire(o.handle, &state)
-	if !acquired {return false}
+	if len(o.damage) == 0 && o.last != nil {
+		wlr.output_buffer(&state, o.last)
+		return commit_target(o, &state)
+	}
+	buffer := acquire_target(o, o.width, o.height)
+	if buffer == nil {return false}
 	defer wlr.buffer_release(buffer)
-	color := wlr.gamma_transform(o.scene.gamma, o.handle)
-	defer wlr.color_release(color)
 	history_prune(o)
 	history := history_acquire(o, buffer)
-	repaint := history_repaint(history)
-	clip: wlr.Region
-	if !wlr.clip_begin(&clip, repaint[:]) {return false}
-	defer wlr.clip_finish(&clip)
-	wlr.output_damage(&state, &clip)
-	pass, begun := wlr.pass_begin(o.renderer, buffer, color)
+	pending := history_repaint(history)
+	repaint := repaint_union(pending[:], {0, 0, o.width, o.height})
+	if o.gamma_dirty {
+		table := wlr.gamma_table(o.scene.gamma, o.handle)
+		if !gles.gamma_update(o.renderer, &o.gamma, table) {return false}
+		o.gamma_dirty = false
+	}
+	pass, begun := gles.begin(target_buffer(buffer), o.gamma)
 	if !begun {return false}
-	wlr.pass_rect(pass, {0, 0, o.width, o.height}, {0, 0, 0, 1}, &clip, true)
+	for box in repaint {gles.clear(&pass, box)}
 	drawn_surfaces := make([dynamic]^wlr.Surface, context.temp_allocator)
 	for e in o.subscriptions {e.visible = false}
-	drawn := draw_parts(o, pass, &clip, repaint[:], &drawn_surfaces)
-	wlr.pass_cursors(o.handle, pass, &clip)
-	submitted := wlr.pass_submit(pass)
+	drawn := draw_parts(o, &pass, repaint[:], &drawn_surfaces)
+	cursor_drawn := draw_cursor(o, &pass, repaint[:], &drawn_surfaces)
+	submitted := gles.submit(&pass)
 	o.passes += 1
-	if o.trace {fmt.printf("Render %s: pass %d\n", o.handle.name, o.passes)}
-	if !drawn || !submitted {output_invalidate(o)
-		return false}
+	if o.trace {fmt.printf("Render %s: pass %d damage %v repaint %v\n", o.handle.name, o.passes, o.damage[:], repaint[:])}
+	if !drawn || !cursor_drawn || !submitted {
+		output_invalidate(o)
+		return false
+	}
 	wlr.output_buffer(&state, buffer)
-	if !wlr.wlr_output_commit_state(o.handle, &state) {output_invalidate(o)
-		return false}
+	if !commit_target(o, &state) {
+		output_invalidate(o)
+		return false
+	}
 	if o.last != nil {wlr.buffer_release(o.last)}
 	o.last = wlr.buffer_retain(buffer)
 	history_presented(history)
@@ -255,21 +269,32 @@ output_commit :: proc(o: ^Output) -> bool {
 	for surface in drawn_surfaces {wlr.surface_frame_done(surface, &now)}
 	return true
 }
+
 set_gamma_manager :: proc(s: ^Scene, manager: ^wlr.wlr_gamma_control_manager_v1) {
 	s.gamma = manager
 	wl.listen(&manager.events.set_gamma, &s.gamma_changed, gamma_changed)
 	wl.listen(&manager.events.destroy, &s.gamma_destroy, gamma_destroyed)
 }
+
 gamma_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	s := wl.owner(listener, Scene, "gamma_changed")
 	e := (^wlr.wlr_gamma_control_manager_v1_set_gamma_event)(data)
-	output_invalidate(get_scene_output(s, e.output))
+	o := get_scene_output(s, e.output)
+	if o != nil {
+		o.gamma_dirty = true
+		output_invalidate(o)
+	}
 }
+
 gamma_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	s := wl.owner(listener, Scene, "gamma_destroy")
 	wl.unlisten(&s.gamma_changed)
 	wl.unlisten(&s.gamma_destroy)
 	s.gamma = nil
+	for o in s.outputs {
+		o.gamma_dirty = true
+		output_invalidate(o)
+	}
 }
