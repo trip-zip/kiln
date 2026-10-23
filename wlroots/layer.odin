@@ -20,7 +20,8 @@ wlr_layer_surface_v1_state :: struct {
 wlr_layer_surface_v1 :: struct #align(8) {
     surface: ^wlr_surface,
     output: ^wlr_output,
-    _opaque_16: [32]u8,
+	_opaque_16: [16]u8,
+	popups: wl.wl_list,
     namespace: cstring,
     _opaque_56: [24]u8,
     current, pending: wlr_layer_surface_v1_state,
@@ -35,7 +36,6 @@ foreign layer_lib {
     wlr_layer_shell_v1_create :: proc(display: ^wl.wl_display, version: u32) -> ^wlr_layer_shell_v1 ---
     wlr_layer_surface_v1_configure :: proc(surface: ^wlr_layer_surface_v1, width, height: u32) -> u32 ---
     wlr_layer_surface_v1_destroy :: proc(surface: ^wlr_layer_surface_v1) ---
-    wlr_scene_subsurface_tree_create :: proc(parent: ^wlr_scene_tree, surface: ^wlr_surface) -> ^wlr_scene_tree ---
 }
 
 // Protocol version four deliberately excludes exclusive-edge requests.
@@ -45,13 +45,10 @@ layer_shell_create :: proc(display: ^wl.wl_display) -> ^wlr_layer_shell_v1 {
 layer_configure :: proc(surface: ^wlr_layer_surface_v1, width, height: u32) {
     wlr_layer_surface_v1_configure(surface, width, height)
 }
-#assert(size_of(wlr_layer_shell_v1) == 72)
-#assert(align_of(wlr_layer_shell_v1) == 8)
+#assert(size_of(wlr_layer_shell_v1) == 72 && align_of(wlr_layer_shell_v1) == 8)
 #assert(offset_of(wlr_layer_shell_v1, events) == 8)
-#assert(size_of(wlr_layer_surface_v1_state) == 60)
-#assert(align_of(wlr_layer_surface_v1_state) == 4)
-#assert(offset_of(wlr_layer_surface_v1_state, committed) == 0)
-#assert(offset_of(wlr_layer_surface_v1_state, anchor) == 4)
+#assert(size_of(wlr_layer_surface_v1_state) == 60 && align_of(wlr_layer_surface_v1_state) == 4)
+#assert(offset_of(wlr_layer_surface_v1_state, committed) == 0 && offset_of(wlr_layer_surface_v1_state, anchor) == 4)
 #assert(offset_of(wlr_layer_surface_v1_state, exclusive_zone) == 8)
 #assert(offset_of(wlr_layer_surface_v1_state, margin) == 12)
 #assert(offset_of(wlr_layer_surface_v1_state, keyboard_interactive) == 28)
@@ -62,29 +59,14 @@ layer_configure :: proc(surface: ^wlr_layer_surface_v1, width, height: u32) {
 #assert(offset_of(wlr_layer_surface_v1_state, configure_serial) == 48)
 #assert(offset_of(wlr_layer_surface_v1_state, actual_width) == 52)
 #assert(offset_of(wlr_layer_surface_v1_state, actual_height) == 56)
-#assert(size_of(wlr_layer_surface_v1) == 288)
-#assert(align_of(wlr_layer_surface_v1) == 8)
-#assert(offset_of(wlr_layer_surface_v1, surface) == 0)
-#assert(offset_of(wlr_layer_surface_v1, output) == 8)
-#assert(offset_of(wlr_layer_surface_v1, namespace) == 48)
-#assert(offset_of(wlr_layer_surface_v1, current) == 80)
-#assert(offset_of(wlr_layer_surface_v1, pending) == 140)
-#assert(offset_of(wlr_layer_surface_v1, initialized) == 200)
-#assert(offset_of(wlr_layer_surface_v1, initial_commit) == 201)
-#assert(offset_of(wlr_layer_surface_v1, events) == 208)
+#assert(size_of(wlr_layer_surface_v1) == 288 && align_of(wlr_layer_surface_v1) == 8)
+#assert(offset_of(wlr_layer_surface_v1, surface) == 0 && offset_of(wlr_layer_surface_v1, output) == 8)
+#assert(offset_of(wlr_layer_surface_v1, namespace) == 48 && offset_of(wlr_layer_surface_v1, current) == 80)
+#assert(offset_of(wlr_layer_surface_v1, pending) == 140 && offset_of(wlr_layer_surface_v1, initialized) == 200)
+#assert(offset_of(wlr_layer_surface_v1, initial_commit) == 201 && offset_of(wlr_layer_surface_v1, events) == 208)
 #assert(offset_of(wlr_layer_surface_v1, data) == 240)
 
 layer_close :: proc(surface: ^wlr_layer_surface_v1) { wlr_layer_surface_v1_destroy(surface) }
-layer_tree_create :: proc(parent: ^wlr_scene_tree, surface: ^wlr_surface) -> ^wlr_scene_tree {
-    tree:=wlr_scene_tree_create(parent)
-    if tree==nil { return nil }
-    if wlr_scene_subsurface_tree_create(tree,surface)==nil {
-        wlr_scene_node_destroy(&tree.node)
-        return nil
-    }
-    wlr_scene_node_set_enabled(&tree.node,false)
-    return tree
-}
 #assert(size_of(type_of(wlr_layer_shell_v1{}.events))==32)
 #assert(align_of(type_of(wlr_layer_shell_v1{}.events))==8)
 #assert(offset_of(type_of(wlr_layer_shell_v1{}.events),new_surface)==0)

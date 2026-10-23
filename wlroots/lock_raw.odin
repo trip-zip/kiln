@@ -2,12 +2,6 @@ package wlroots
 
 import wl "../wayland_server"
 
-wlr_damage_ring :: struct #align(8) { _opaque:[40]u8 }
-wlr_scene_output :: struct #align(8) {
-    _opaque_0:[64]u8,
-    damage_ring:wlr_damage_ring,
-    _opaque_104:[240]u8,
-}
 
 wlr_session_lock_manager_v1 :: struct #align(8) {
     _opaque_0: [8]u8,
@@ -35,7 +29,6 @@ wlr_output_event_present :: struct #align(8) {
 }
 foreign import lock_lib "system:wlroots-0.20"
 foreign lock_lib {
-    wlr_damage_ring_add_whole :: proc(ring:^wlr_damage_ring) ---
     wlr_output_is_x11 :: proc(output: ^wlr_output) -> bool ---
     wlr_output_effective_resolution :: proc(output: ^wlr_output, width,height:^i32) ---
     wlr_output_transformed_resolution :: proc(output: ^wlr_output, width,height:^i32) ---
@@ -46,8 +39,6 @@ foreign lock_lib {
     wlr_seat_keyboard_end_grab :: proc(seat: ^wlr_seat) ---
     wlr_seat_pointer_end_grab :: proc(seat: ^wlr_seat) ---
 }
-#assert(size_of(wlr_damage_ring)==40 && align_of(wlr_damage_ring)==8)
-#assert(size_of(wlr_scene_output)==344 && align_of(wlr_scene_output)==8 && offset_of(wlr_scene_output,damage_ring)==64)
 #assert(size_of(wlr_session_lock_manager_v1)==72 && align_of(wlr_session_lock_manager_v1)==8)
 #assert(offset_of(wlr_session_lock_manager_v1,events)==8)
 #assert(size_of(type_of(wlr_session_lock_manager_v1{}.events))==32 && align_of(type_of(wlr_session_lock_manager_v1{}.events))==8)

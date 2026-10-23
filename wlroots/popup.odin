@@ -36,5 +36,4 @@ popup_constrain :: proc(popup: ^wlr_xdg_popup, bounds: wlr_box, force: bool) {
 #assert(align_of(wlr_xdg_positioner_rules)==4)
 #assert(size_of(wlr_xdg_popup_configure)==84)
 #assert(align_of(wlr_xdg_popup_configure)==4)
-#assert(offset_of(wlr_xdg_popup_configure,geometry)==4)
-#assert(offset_of(wlr_xdg_popup_configure,rules)==20)
+#assert(offset_of(wlr_xdg_popup_configure,geometry)==4 && offset_of(wlr_xdg_popup_configure,rules)==20)

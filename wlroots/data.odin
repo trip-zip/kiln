@@ -4,7 +4,12 @@ import wl "../wayland_server"
 
 wlr_primary_selection_source :: struct {}
 wlr_primary_selection_v1_device_manager :: struct {}
-wlr_drag_icon :: struct {}
+wlr_drag_icon :: struct {
+    _opaque_0: [8]u8,
+    surface: ^wlr_surface,
+    events: struct { destroy: wl.wl_signal },
+    _opaque_32: [32]u8,
+}
 wlr_drag :: struct #align(8) {
     _opaque_0: [104]u8,
     icon: ^wlr_drag_icon,
@@ -30,7 +35,6 @@ foreign data_lib {
     wlr_seat_validate_pointer_grab_serial :: proc(seat: ^wlr_seat, origin: ^wlr_surface, serial: u32) -> bool ---
     wlr_seat_start_pointer_drag :: proc(seat: ^wlr_seat, drag: ^wlr_drag, serial: u32) ---
     wlr_data_source_destroy :: proc(source: ^wlr_data_source) ---
-    wlr_scene_drag_icon_create :: proc(parent: ^wlr_scene_tree, icon: ^wlr_drag_icon) -> ^wlr_scene_tree ---
 }
 primary_selection_create :: proc(display: ^wl.wl_display) -> bool { return wlr_primary_selection_v1_device_manager_create(display)!=nil }
 primary_selection_set :: proc(seat: ^wlr_seat, event: ^wlr_seat_request_set_primary_selection_event) { wlr_seat_set_primary_selection(seat,event.source,event.serial) }
@@ -39,19 +43,15 @@ pointer_drag_request :: proc(seat: ^wlr_seat, event: ^wlr_seat_request_start_dra
         wlr_seat_start_pointer_drag(seat,event.drag,event.serial)
     } else if event.drag.source!=nil { wlr_data_source_destroy(event.drag.source) }
 }
-drag_icon_create :: proc(parent: ^wlr_scene_tree, icon: ^wlr_drag_icon) -> ^wlr_scene_tree { return wlr_scene_drag_icon_create(parent,icon) }
 #assert(size_of(wlr_drag)==312 && align_of(wlr_drag)==8)
-#assert(offset_of(wlr_drag,icon)==104)
-#assert(offset_of(wlr_drag,source)==120)
-#assert(offset_of(wlr_drag,events)==144)
+#assert(offset_of(wlr_drag,icon)==104 && offset_of(wlr_drag,source)==120 && offset_of(wlr_drag,events)==144)
 #assert(size_of(type_of(wlr_drag{}.events))==64 && align_of(type_of(wlr_drag{}.events))==8)
 #assert(offset_of(type_of(wlr_drag{}.events),focus)==0)
 #assert(offset_of(type_of(wlr_drag{}.events),motion)==16)
 #assert(offset_of(type_of(wlr_drag{}.events),drop)==32)
 #assert(offset_of(type_of(wlr_drag{}.events),destroy)==48)
 #assert(size_of(wlr_seat_request_start_drag_event)==24 && align_of(wlr_seat_request_start_drag_event)==8)
-#assert(offset_of(wlr_seat_request_start_drag_event,drag)==0)
-#assert(offset_of(wlr_seat_request_start_drag_event,origin)==8)
+#assert(offset_of(wlr_seat_request_start_drag_event,drag)==0 && offset_of(wlr_seat_request_start_drag_event,origin)==8)
 #assert(offset_of(wlr_seat_request_start_drag_event,serial)==16)
 #assert(size_of(wlr_seat_request_set_primary_selection_event)==16 && align_of(wlr_seat_request_set_primary_selection_event)==8)
 #assert(offset_of(wlr_seat_request_set_primary_selection_event,source)==0)

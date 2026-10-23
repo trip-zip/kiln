@@ -6,7 +6,6 @@ import "core:math"
 lock_manager_create :: proc(display: ^wl.wl_display) -> ^wlr_session_lock_manager_v1 { return wlr_session_lock_manager_v1_create(display) }
 lock_reject :: proc(lock: ^wlr_session_lock_v1) { wlr_session_lock_v1_destroy(lock) }
 lock_acknowledge :: proc(lock: ^wlr_session_lock_v1) { wlr_session_lock_v1_send_locked(lock) }
-lock_damage :: proc(output:^wlr_scene_output) { if output!=nil { wlr_damage_ring_add_whole(&output.damage_ring) } }
 lock_configure :: proc(surface: ^wlr_session_lock_surface_v1, width,height: i32) { wlr_session_lock_surface_v1_configure(surface,u32(max(1,width)),u32(max(1,height))) }
 seat_end_grabs :: proc(seat: ^wlr_seat) {
     wlr_seat_keyboard_end_grab(seat)

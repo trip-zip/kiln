@@ -2,7 +2,6 @@ package wlroots
 
 import "core:c"
 import li "../libinput"
-import "core:sys/posix"
 import wl "../wayland_server"
 import xkb "../xkbcommon"
 
@@ -17,15 +16,11 @@ wlr_output_mode :: struct {
 	link: wl.wl_list,
 }
 #assert(size_of(wlr_output_mode) == 40)
-#assert(offset_of(wlr_output_mode, width) == 0)
-#assert(offset_of(wlr_output_mode, height) == 4)
-#assert(offset_of(wlr_output_mode, refresh) == 8)
-#assert(offset_of(wlr_output_mode, preferred) == 12)
-#assert(offset_of(wlr_output_mode, picture_aspect_ratio) == 16)
-#assert(offset_of(wlr_output_mode, link) == 24)
+#assert(offset_of(wlr_output_mode, width) == 0 && offset_of(wlr_output_mode, height) == 4)
+#assert(offset_of(wlr_output_mode, refresh) == 8 && offset_of(wlr_output_mode, preferred) == 12)
+#assert(offset_of(wlr_output_mode, picture_aspect_ratio) == 16 && offset_of(wlr_output_mode, link) == 24)
 wlr_xdg_output_manager_v1 :: struct {}
 wlr_output_layout_output :: struct {}
-wlr_scene_output_layout :: struct {}
 
 wlr_compositor :: struct {}
 wlr_subcompositor :: struct {}
@@ -44,7 +39,6 @@ wlr_data_source :: struct {}
 WLR_INPUT_DEVICE_KEYBOARD :: 0
 WLR_INPUT_DEVICE_POINTER :: 1
 WLR_MODIFIER_ALT :: 1 << 3
-WLR_SCENE_NODE_BUFFER :: 2
 
 foreign lib {
 	wlr_seat_pointer_clear_focus :: proc(seat: ^wlr_seat) ---
@@ -54,17 +48,9 @@ foreign lib {
 	wlr_xcursor_manager_get_xcursor :: proc(manager: ^wlr_xcursor_manager, name: cstring, scale: f32) -> ^wlr_xcursor ---
 	wlr_xcursor_manager_load :: proc(manager: ^wlr_xcursor_manager, scale: f32) -> bool ---
 	wlr_xdg_toplevel_send_close :: proc(toplevel: ^wlr_xdg_toplevel) ---
-	wlr_scene_node_coords :: proc(node: ^wlr_scene_node, x, y: ^i32) -> bool ---
 	wlr_output_schedule_frame :: proc(output: ^wlr_output) ---
 	wlr_output_layout_get_box :: proc(layout: ^wlr_output_layout, output: ^wlr_output, box: ^wlr_box) ---
 	wlr_output_layout_output_at :: proc(layout: ^wlr_output_layout, x, y: f64) -> ^wlr_output ---
-	wlr_scene_tree_create :: proc(parent: ^wlr_scene_tree) -> ^wlr_scene_tree ---
-	wlr_scene_node_set_position :: proc(node: ^wlr_scene_node, x, y: i32) ---
-	wlr_scene_node_set_enabled :: proc(node: ^wlr_scene_node, enabled: bool) ---
-	wlr_scene_node_reparent :: proc(node: ^wlr_scene_node, parent: ^wlr_scene_tree) ---
-	wlr_scene_rect_create :: proc(parent: ^wlr_scene_tree, width, height: i32, color: [^]f32) -> ^wlr_scene_rect ---
-	wlr_scene_rect_set_size :: proc(rect: ^wlr_scene_rect, width, height: i32) ---
-	wlr_scene_rect_set_color :: proc(rect: ^wlr_scene_rect, color: [^]f32) ---
 	wlr_xdg_toplevel_set_tiled :: proc(toplevel: ^wlr_xdg_toplevel, edges: u32) -> u32 ---
 
 	wlr_xdg_output_manager_v1_create :: proc(display: ^wl.wl_display, layout: ^wlr_output_layout) -> ^wlr_xdg_output_manager_v1 ---
@@ -96,19 +82,6 @@ foreign lib {
 	wlr_output_state_set_adaptive_sync_enabled :: proc(state: ^wlr_output_state, enabled: bool) ---
 	wlr_output_layout_add :: proc(layout: ^wlr_output_layout, output: ^wlr_output, x, y: c.int) -> ^wlr_output_layout_output ---
 
-	wlr_scene_create :: proc() -> ^wlr_scene ---
-	wlr_scene_node_destroy :: proc(node: ^wlr_scene_node) ---
-	wlr_scene_node_raise_to_top :: proc(node: ^wlr_scene_node) ---
-	wlr_scene_node_at :: proc(node: ^wlr_scene_node, lx, ly: f64, nx, ny: ^f64) -> ^wlr_scene_node ---
-	wlr_scene_buffer_from_node :: proc(node: ^wlr_scene_node) -> ^wlr_scene_buffer ---
-	wlr_scene_surface_try_from_buffer :: proc(buffer: ^wlr_scene_buffer) -> ^wlr_scene_surface ---
-	wlr_scene_attach_output_layout :: proc(scene: ^wlr_scene, layout: ^wlr_output_layout) -> ^wlr_scene_output_layout ---
-	wlr_scene_output_create :: proc(scene: ^wlr_scene, output: ^wlr_output) -> ^wlr_scene_output ---
-	wlr_scene_output_layout_add_output :: proc(layout: ^wlr_scene_output_layout, layout_output: ^wlr_output_layout_output, scene_output: ^wlr_scene_output) ---
-	wlr_scene_get_scene_output :: proc(scene: ^wlr_scene, output: ^wlr_output) -> ^wlr_scene_output ---
-	wlr_scene_output_commit :: proc(output: ^wlr_scene_output, options: ^wlr_scene_output_state_options) -> bool ---
-	wlr_scene_output_send_frame_done :: proc(output: ^wlr_scene_output, now: ^posix.timespec) ---
-	wlr_scene_xdg_surface_create :: proc(parent: ^wlr_scene_tree, surface: ^wlr_xdg_surface) -> ^wlr_scene_tree ---
 
 	wlr_xdg_shell_create :: proc(display: ^wl.wl_display, version: u32) -> ^wlr_xdg_shell ---
 	wlr_xdg_toplevel_set_size :: proc(toplevel: ^wlr_xdg_toplevel, width, height: i32) -> u32 ---
@@ -117,7 +90,6 @@ foreign lib {
 	wlr_xdg_toplevel_set_suspended :: proc(toplevel: ^wlr_xdg_toplevel, suspended: bool) -> u32 ---
 	wlr_xdg_toplevel_set_activated :: proc(toplevel: ^wlr_xdg_toplevel, activated: bool) -> u32 ---
 	wlr_xdg_surface_schedule_configure :: proc(surface: ^wlr_xdg_surface) -> u32 ---
-	wlr_xdg_surface_try_from_wlr_surface :: proc(surface: ^wlr_surface) -> ^wlr_xdg_surface ---
 
 	wlr_seat_create :: proc(display: ^wl.wl_display, name: cstring) -> ^wlr_seat ---
 	wlr_seat_set_capabilities :: proc(seat: ^wlr_seat, capabilities: u32) ---
@@ -147,7 +119,6 @@ foreign lib {
 	wlr_pointer_from_input_device :: proc(device: ^wlr_input_device) -> ^wlr_pointer ---
 	wlr_cursor_attach_input_device :: proc(cursor: ^wlr_cursor, device: ^wlr_input_device) ---
 	wlr_cursor_move :: proc(cursor: ^wlr_cursor, device: ^wlr_input_device, dx, dy: f64) ---
-	wlr_cursor_warp_absolute :: proc(cursor: ^wlr_cursor, device: ^wlr_input_device, x, y: f64) ---
 	wlr_cursor_set_xcursor :: proc(cursor: ^wlr_cursor, manager: ^wlr_xcursor_manager, name: cstring) ---
 	wlr_cursor_set_surface :: proc(cursor: ^wlr_cursor, surface: ^wlr_surface, hotspot_x, hotspot_y: i32) ---
 	wlr_xcursor_manager_create :: proc(name: cstring, size: u32) -> ^wlr_xcursor_manager ---
