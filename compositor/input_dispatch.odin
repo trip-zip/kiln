@@ -60,6 +60,10 @@ dispatch_input :: proc(s: ^Server, event: ^vm.Event) {
         // Position follows earlier device motion; the queued payload keeps ownership.
         current=e^;pointer_fact(s,&current);current.mods=e.mods;e=&current
     }
+	if e.native == .Button && e.pressed {
+		surface, _, _, _ := hit_test(s,e.px,e.py)
+		if popup_press(s,surface) { s.buttons[e.code] = true; return }
+	}
 	inspector_consumed:=!e.blocked && !s.pointer_grabbed && inspector_input(s,e)
     if inspector_consumed { pointer_refresh_at(s,e.time,e.px,e.py,false);e.blocked=true;e.claimed=true }
     if e.native==.Button && !e.pressed && s.buttons[e.code] { e.blocked=true;e.claimed=true }

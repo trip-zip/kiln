@@ -149,11 +149,12 @@ damage_part :: proc(o: ^Output, p: Part) {
 	damage_box(o, output_box(o, coverage(p)))
 }
 
-client_damage :: proc(o: ^Output, id: u32) {
+client_damage :: proc(o: ^Output, id: u32, geometry: ^wlr.Box = nil) {
 	if o == nil {return}
 	for &p in o.parts {
 		if p.kind == .Client && p.id == id {
 			damage_part(o, p)
+			if geometry != nil && p.geometry != geometry^ { p.geometry = geometry^; damage_part(o, p) }
 			p.coverage = coverage(p)
 		}
 	}

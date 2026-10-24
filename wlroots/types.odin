@@ -124,113 +124,6 @@ wlr_seat_client :: struct {
 #assert(size_of(wlr_output_event_request_state) == 16 && align_of(wlr_output_event_request_state) == 8)
 #assert(offset_of(wlr_output_event_request_state, state) == 8)
 
-
-
-
-
-wlr_xdg_shell_events :: struct #align(8) {
-	_opaque_0: [16]u8,
-	new_toplevel: wl.Signal,
-	new_popup: wl.Signal,
-	_opaque_48: [16]u8,
-}
-#assert(size_of(wlr_xdg_shell_events) == 64 && align_of(wlr_xdg_shell_events) == 8)
-#assert(offset_of(wlr_xdg_shell_events, new_toplevel) == 16 && offset_of(wlr_xdg_shell_events, new_popup) == 32)
-
-wlr_xdg_shell :: struct #align(8) {
-	_opaque_0: [56]u8,
-	events: wlr_xdg_shell_events,
-	_opaque_120: [32]u8,
-}
-#assert(size_of(wlr_xdg_shell) == 152 && align_of(wlr_xdg_shell) == 8)
-#assert(offset_of(wlr_xdg_shell, events) == 56)
-
-wlr_xdg_surface :: struct #align(8) {
-	_opaque_0: [16]u8,
-	surface: ^wlr_surface,
-	_opaque_24: [40]u8,
-	popups: wl.List,
-	_opaque_80: [88]u8,
-	initialized: bool,
-	initial_commit: bool,
-	_opaque_170: [2]u8,
-	geometry: wlr_box,
-	_opaque_188: [156]u8,
-}
-#assert(size_of(wlr_xdg_surface) == 344 && align_of(wlr_xdg_surface) == 8)
-#assert(offset_of(wlr_xdg_surface, surface) == 16 && offset_of(wlr_xdg_surface, initialized) == 168)
-#assert(offset_of(wlr_xdg_surface, initial_commit) == 169)
-#assert(offset_of(wlr_xdg_surface, geometry) == 172)
-
-wlr_xdg_toplevel_events :: struct #align(8) {
-	destroy: wl.Signal,
-	request_maximize: wl.Signal,
-	request_fullscreen: wl.Signal,
-	request_minimize: wl.Signal,
-	_opaque_64: [64]u8,
-	set_title, set_app_id: wl.Signal,
-}
-#assert(size_of(wlr_xdg_toplevel_events) == 160 && align_of(wlr_xdg_toplevel_events) == 8)
-#assert(offset_of(wlr_xdg_toplevel_events, destroy) == 0 && offset_of(wlr_xdg_toplevel_events, request_maximize) == 16)
-#assert(offset_of(wlr_xdg_toplevel_events, request_fullscreen) == 32)
-#assert(offset_of(wlr_xdg_toplevel_events, request_minimize) == 48)
-#assert(offset_of(wlr_xdg_toplevel_events, set_title) == 128 && offset_of(wlr_xdg_toplevel_events, set_app_id) == 144)
-
-wlr_xdg_toplevel_requested :: struct #align(8) {
-	maximized, minimized, fullscreen: bool,
-	_opaque_3: [37]u8,
-}
-#assert(size_of(wlr_xdg_toplevel_requested) == 40)
-#assert(offset_of(wlr_xdg_toplevel_requested, maximized) == 0 && offset_of(wlr_xdg_toplevel_requested, minimized) == 1)
-#assert(offset_of(wlr_xdg_toplevel_requested, fullscreen) == 2)
-
-wlr_xdg_toplevel_state :: struct #align(4) {
-	maximized, fullscreen: bool,
-	_opaque_2: [38]u8,
-}
-#assert(size_of(wlr_xdg_toplevel_state) == 40)
-#assert(offset_of(wlr_xdg_toplevel_state, maximized) == 0 && offset_of(wlr_xdg_toplevel_state, fullscreen) == 1)
-
-wlr_xdg_toplevel :: struct #align(8) {
-	resource: ^wl.Resource,
-	base: ^wlr_xdg_surface,
-	parent: ^wlr_xdg_toplevel,
-	current: wlr_xdg_toplevel_state,
-	_opaque_64: [80]u8,
-	requested: wlr_xdg_toplevel_requested,
-	title: cstring,
-	app_id: cstring,
-	events: wlr_xdg_toplevel_events,
-	_opaque_360: [64]u8,
-}
-#assert(size_of(wlr_xdg_toplevel) == 424 && align_of(wlr_xdg_toplevel) == 8)
-#assert(offset_of(wlr_xdg_toplevel, resource) == 0 && offset_of(wlr_xdg_toplevel, base) == 8)
-#assert(offset_of(wlr_xdg_toplevel, parent) == 16 && offset_of(wlr_xdg_toplevel, current) == 24)
-#assert(offset_of(wlr_xdg_toplevel, title) == 184 && offset_of(wlr_xdg_toplevel, requested) == 144)
-#assert(offset_of(wlr_xdg_toplevel, app_id) == 192 && offset_of(wlr_xdg_toplevel, events) == 200)
-
-wlr_xdg_popup_events :: struct #align(8) {
-	destroy, reposition: wl.Signal,
-}
-#assert(size_of(wlr_xdg_popup_events) == 32 && align_of(wlr_xdg_popup_events) == 8)
-#assert(offset_of(wlr_xdg_popup_events, destroy) == 0 && offset_of(wlr_xdg_popup_events, reposition) == 16)
-
-wlr_xdg_popup :: struct #align(8) {
-	base: ^wlr_xdg_surface,
-	link: wl.List,
-	_opaque_24: [8]u8,
-	parent: ^wlr_surface,
-	_opaque_40: [8]u8,
-	scheduled: wlr_xdg_popup_configure,
-	current: wlr_xdg_popup_state,
-    _opaque_152: [24]u8,
-	events: wlr_xdg_popup_events,
-	_opaque_208: [56]u8,
-}
-#assert(size_of(wlr_xdg_popup) == 264 && align_of(wlr_xdg_popup) == 8)
-#assert(offset_of(wlr_xdg_popup, base) == 0 && offset_of(wlr_xdg_popup, parent) == 32)
-#assert(offset_of(wlr_xdg_popup, events) == 176 && offset_of(wlr_xdg_popup, scheduled) == 48)
-
 wlr_surface_events :: struct #align(8) {
 	_opaque_0: [16]u8,
 	commit: wl.Signal,
@@ -250,7 +143,8 @@ wlr_surface :: struct #align(8) {
 	_opaque_48:    [24]u8,
 	input_region: pixman_region32_t,
 	current: wlr_surface_state,
-	_opaque_384: [304]u8,
+	pending: wlr_surface_state,
+	_opaque_672: [16]u8,
     mapped: bool,
     _opaque_689: [23]u8,
 	events: wlr_surface_events,
@@ -264,12 +158,13 @@ wlr_surface_state :: struct #align(8) {
     transform: i32,
     _opaque_124: [20]u8,
 	width,height: i32,
-	_opaque_152: [8]u8,
+	buffer_width, buffer_height: i32,
     subsurfaces_below, subsurfaces_above: wl.List,
     _opaque_192: [96]u8,
 }
 #assert(size_of(wlr_surface_state)==288 && align_of(wlr_surface_state)==8)
 #assert(offset_of(wlr_surface_state,width)==144 && offset_of(wlr_surface_state,height)==148)
+#assert(offset_of(wlr_surface_state,buffer_width)==152 && offset_of(wlr_surface_state,buffer_height)==156)
 #assert(offset_of(wlr_surface,current)==96 && offset_of(wlr_surface, resource) == 0)
 #assert(size_of(wlr_surface) == 968 && align_of(wlr_surface) == 8)
 #assert(offset_of(wlr_surface, events) == 712 && offset_of(wlr_surface,mapped)==688)
@@ -528,3 +423,5 @@ wlr_output_layout :: struct #align(8) {
 #assert(size_of(type_of(wlr_seat_client{}.events)) == 16 && offset_of(type_of(wlr_seat_client{}.events), destroy) == 0)
 
 #assert(offset_of(wlr_output_events, bind) == 96)
+
+#assert(offset_of(wlr_surface, pending) == 384)

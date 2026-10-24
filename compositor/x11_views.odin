@@ -1,5 +1,7 @@
 package compositor
 
+import sh "../shells"
+
 import ext "../extensions"
 
 import sp "../scene_paint"
@@ -167,7 +169,7 @@ publish_view_size :: proc(v: ^View, width, height: i32) {
 	if view_override_redirect(v) {return}
 	changed := request_size(v, width, height)
 	if t := xdg(v); t != nil {
-		if changed {wlr.wlr_xdg_toplevel_set_size(t, width, height)
+		if changed {sh.set_size(t, width, height)
 			v.output.configures += 1}
 	} else if x := x11(v); x != nil {
 		px, py: i32

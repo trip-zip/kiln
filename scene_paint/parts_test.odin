@@ -1,5 +1,6 @@
 package scene_paint
 
+import sh "../shells"
 import wl "../wayland"
 import raw "../wayland"
 import wlr "../wlroots"
@@ -142,19 +143,15 @@ later_parts_cannot_occlude_client_popups :: proc(t: ^testing.T) {
 		testing.expect(t, test_region_begin(&surface.input_region, []wlr.Box{{0, 0, 80, 60}}))
 		defer test_region_finish(&surface.input_region)
 	}
-	base := wlr.wlr_xdg_surface {
-		surface = &popup_surface,
-	}
-	wl.init(&base.popups)
-	layer := wlr.wlr_layer_surface_v1 {
-		surface = &parent,
-	}
-	wl.init(&layer.popups)
-	popup := wlr.wlr_xdg_popup {
-		base = &base,
-		current = {geometry = {10, 15, 80, 60}},
-	}
-	wl.insert(&layer.popups, &popup.link)
+	base := new(sh.Xdg_Surface); base.surface = &parent
+	defer free(base)
+	popup := sh.Popup{surface=&popup_surface,parent=&parent,current={geometry={10,15,80,60}}}
+	append(&base.popups,&popup)
+	defer delete(base.popups)
+	saved := sh.roles
+	sh.roles = make(map[^wlr.Surface]sh.Surface_Object)
+	sh.roles[&parent] = base
+	defer { delete(sh.roles); sh.roles = saved }
 	o := Output {
 		width  = 200,
 		height = 150,
@@ -162,7 +159,7 @@ later_parts_cannot_occlude_client_popups :: proc(t: ^testing.T) {
 	}
 	defer output_finish(&o)
 	parts := []Part {
-		{kind = .Client, id = 7, surface = &parent, layer = &layer, box = {30, 40, 80, 60}},
+		{kind = .Client, id = 7, surface = &parent, box = {30, 40, 80, 60}},
 		{kind = .Client, id = 8, surface = &later, box = {30, 40, 80, 60}},
 		{kind = .Solid, color = {1, 0, 0, 1}, box = {30, 40, 100, 100}},
 	}

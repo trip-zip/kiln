@@ -1,5 +1,7 @@
 package compositor
 
+import sh "../shells"
+
 import ext "../extensions"
 
 import "core:testing"
@@ -23,8 +25,7 @@ activation_owns_payload_and_retires_mints :: proc(t: ^testing.T) {
         testing.expect_value(t,len(s.minted_tokens),0)
     }
     surface:wlr.wlr_surface
-    base:=wlr.wlr_xdg_surface{surface=&surface}
-    top:=wlr.wlr_xdg_toplevel{base=&base}
+    top:=sh.Toplevel{surface=&surface}
     v:=View{id=42,server=&s,protocol=&top,mapped=true}
     append(&s.views,&v)
     defer clear(&s.views)

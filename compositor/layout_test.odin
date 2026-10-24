@@ -1,5 +1,7 @@
 package compositor
 
+import sh "../shells"
+
 import clay "../clay"
 import layout "../layout"
 import vm "../lua_runtime"
@@ -61,11 +63,8 @@ reconcile_keeps_borrowed_client_identity :: proc(t: ^testing.T) {
 	defer {clear_chrome(&output)
 		sp.output_finish(&output.paint)}
 	surface: wlr.Surface
-	base := wlr.wlr_xdg_surface {
+	top := sh.Toplevel {
 		surface = &surface,
-	}
-	top := wlr.wlr_xdg_toplevel {
-		base = &base,
 	}
 	s: Server
 	defer delete(s.views)
@@ -103,9 +102,7 @@ reconcile_keeps_borrowed_client_identity :: proc(t: ^testing.T) {
 @(test)
 client_commits_do_not_dirty_or_repeat_size_requests :: proc(t: ^testing.T) {
 	output: Output
-	base: wlr.wlr_xdg_surface
-	toplevel := wlr.wlr_xdg_toplevel {
-		base = &base,
+	toplevel := sh.Toplevel {
 	}
 	view := View {
 		output   = &output,

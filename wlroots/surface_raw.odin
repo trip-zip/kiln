@@ -3,18 +3,12 @@ package wlroots
 import "core:sys/posix"
 import wl "../wayland"
 
-wlr_xdg_popup_state :: struct { geometry: wlr_box, _opaque_16: [4]u8,
-}
-
 foreign import surface_lib "system:wlroots-0.20"
 surface_iterator :: #type proc "c" (surface: ^wlr_surface, x, y: i32, data: rawptr)
 foreign surface_lib {
 	wlr_surface_get_root_surface :: proc(surface: ^wlr_surface) -> ^wlr_surface ---
 	wlr_output_schedule_done :: proc(output: ^wlr_output) ---
-	wlr_xdg_surface_for_each_popup_surface :: proc(surface: ^wlr_xdg_surface, iterator: surface_iterator, data: rawptr) ---
 	wlr_surface_for_each_surface :: proc(surface: ^wlr_surface, iterator: surface_iterator, data: rawptr) ---
-	wlr_layer_surface_v1_for_each_popup_surface :: proc(surface: ^wlr_layer_surface_v1, iterator: surface_iterator,
-	data: rawptr) ---
 	wlr_surface_surface_at :: proc(surface: ^wlr_surface, x, y: f64, sx, sy: ^f64) -> ^wlr_surface ---
 	wlr_output_state_set_buffer :: proc(state:^wlr_output_state,buffer:^wlr_buffer) ---
 	wlr_surface_send_frame_done :: proc(surface:^wlr_surface,now:^posix.timespec) ---
@@ -28,9 +22,6 @@ foreign surface_lib {
 #assert(offset_of(wlr_surface_state,dx)==16 && offset_of(wlr_surface_state,dy)==20)
 #assert(offset_of(wlr_surface_state,transform)==120)
 #assert(offset_of(wlr_surface_state,subsurfaces_below)==160 && offset_of(wlr_surface_state,subsurfaces_above)==176)
-#assert(size_of(wlr_xdg_popup_state)==20 && align_of(wlr_xdg_popup_state)==4)
-#assert(offset_of(wlr_xdg_popup_state,geometry)==0)
-#assert(offset_of(wlr_xdg_popup,current)==132)
 #assert(size_of(wlr_drag_icon)==64 && align_of(wlr_drag_icon)==8)
 #assert(offset_of(wlr_drag_icon,surface)==8 && offset_of(wlr_drag_icon,events)==16)
 #assert(offset_of(wlr_output,needs_frame)==185 && offset_of(wlr_output,swapchain)==456)
@@ -57,5 +48,3 @@ wlr_subsurface :: struct {
 #assert(size_of(wlr_subsurface)==208 && align_of(wlr_subsurface)==8)
 #assert(offset_of(wlr_subsurface,surface)==8 && offset_of(wlr_subsurface,current)==24)
 #assert(offset_of(wlr_surface,input_region)==72)
-#assert(offset_of(wlr_xdg_surface,popups)==64 && offset_of(wlr_xdg_popup,link)==8)
-#assert(offset_of(wlr_layer_surface_v1,popups)==32)

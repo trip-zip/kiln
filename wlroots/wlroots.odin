@@ -51,12 +51,10 @@ foreign lib {
 	wlr_keyboard_notify_modifiers :: proc(keyboard: ^wlr_keyboard, depressed, latched, locked, group: u32) ---
 	wlr_xcursor_manager_get_xcursor :: proc(manager: ^wlr_xcursor_manager, name: cstring, scale: f32) -> ^wlr_xcursor ---
 	wlr_xcursor_manager_load :: proc(manager: ^wlr_xcursor_manager, scale: f32) -> bool ---
-	wlr_xdg_toplevel_send_close :: proc(toplevel: ^wlr_xdg_toplevel) ---
 	wlr_output_schedule_frame :: proc(output: ^wlr_output) ---
 	wlr_output_update_needs_frame :: proc(output: ^wlr_output) ---
 	wlr_output_layout_get_box :: proc(layout: ^wlr_output_layout, output: ^wlr_output, box: ^wlr_box) ---
 	wlr_output_layout_output_at :: proc(layout: ^wlr_output_layout, x, y: f64) -> ^wlr_output ---
-	wlr_xdg_toplevel_set_tiled :: proc(toplevel: ^wlr_xdg_toplevel, edges: u32) -> u32 ---
 
 	wlr_backend_autocreate :: proc(loop: ^wl.Loop, session_ptr: ^^wlr_session) -> ^wlr_backend ---
 	wlr_backend_start :: proc(backend: ^wlr_backend) -> bool ---
@@ -78,15 +76,6 @@ foreign lib {
 	wlr_output_state_set_scale :: proc(state: ^wlr_output_state, scale: f32) ---
 	wlr_output_state_set_adaptive_sync_enabled :: proc(state: ^wlr_output_state, enabled: bool) ---
 	wlr_output_layout_add :: proc(layout: ^wlr_output_layout, output: ^wlr_output, x, y: c.int) -> ^wlr_output_layout_output ---
-
-
-	wlr_xdg_shell_create :: proc(display: ^wl.Display, version: u32) -> ^wlr_xdg_shell ---
-	wlr_xdg_toplevel_set_size :: proc(toplevel: ^wlr_xdg_toplevel, width, height: i32) -> u32 ---
-	wlr_xdg_toplevel_set_fullscreen :: proc(toplevel: ^wlr_xdg_toplevel, fullscreen: bool) -> u32 ---
-	wlr_xdg_toplevel_set_maximized :: proc(toplevel: ^wlr_xdg_toplevel, maximized: bool) -> u32 ---
-	wlr_xdg_toplevel_set_suspended :: proc(toplevel: ^wlr_xdg_toplevel, suspended: bool) -> u32 ---
-	wlr_xdg_toplevel_set_activated :: proc(toplevel: ^wlr_xdg_toplevel, activated: bool) -> u32 ---
-	wlr_xdg_surface_schedule_configure :: proc(surface: ^wlr_xdg_surface) -> u32 ---
 
 	wlr_seat_create :: proc(display: ^wl.Display, name: cstring) -> ^wlr_seat ---
 	wlr_seat_set_capabilities :: proc(seat: ^wlr_seat, capabilities: u32) ---

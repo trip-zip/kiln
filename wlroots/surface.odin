@@ -10,8 +10,6 @@ Render_Buffer :: wlr_buffer
 Surface :: wlr_surface
 surface_root :: wlr_surface_get_root_surface
 surface_each :: wlr_surface_for_each_surface
-xdg_popups :: wlr_xdg_surface_for_each_popup_surface
-layer_popups :: wlr_layer_surface_v1_for_each_popup_surface
 surface_at :: wlr_surface_surface_at
 buffer_retain :: wlr_buffer_lock
 buffer_release :: wlr_buffer_unlock

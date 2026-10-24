@@ -1,5 +1,6 @@
 package compositor
 
+import sh "../shells"
 import sp "../scene_paint"
 
 import "../keymap"
@@ -222,6 +223,7 @@ pointer_motion :: proc(s: ^Server, time_msec: u32) {
 	)
 	if !s.pointer_grabbed {
 		surface, view, _, _ := hit_test(s, s.cursor.x, s.cursor.y)
+		if !popup_pointer_allowed(s, surface) {surface, view = nil, nil}
 		handle: u32
 		if surface != nil && view != nil {handle = view.id}
 		if handle != s.pointer_client {
@@ -240,6 +242,7 @@ pointer_refresh_at :: proc(
 ) {
 	if locked(s) || s.pointer_grabbed {return}
 	surface, view, sx, sy := hit_test(s, x, y)
+	if !popup_pointer_allowed(s, surface) {surface, view = nil, nil}
 	// Finish motion for the old focus before leave. Relative-only events can
 	// otherwise stay pending in XWayland and move its cursor on the next enter.
 	if s.seat.pointer_state.focused_surface != surface {wlr.wlr_seat_pointer_notify_frame(s.seat)}
@@ -424,6 +427,7 @@ pointer_fact :: proc(s: ^Server, e: ^vm.Event) {
 		e.output = string(output.name)
 	}
 	surface, view, _, _ := hit_test(s, e.px, e.py)
+	if !popup_pointer_allowed(s, surface) {surface, view = nil, nil}
 	e.native_surface = surface != nil
 	if surface != nil && view != nil {e.handle = view.id}
 	if kb := wlr.wlr_seat_get_keyboard(s.seat); kb != nil {e.mods = wlr.wlr_keyboard_get_modifiers(kb)}
@@ -472,4 +476,43 @@ valid_motion :: proc(s: ^Server, e: ^vm.Event) -> bool {
 		return false
 	}
 	return true
+}
+
+popup_pointer_allowed :: proc(s: ^Server, surface: ^wlr.Surface) -> bool {
+	client := sh.grab_client(s.shell)
+	return client == nil || (surface != nil && surface.resource.client == client)
+}
+popup_press :: proc(s: ^Server, surface: ^wlr.Surface) -> bool {
+	if popup_pointer_allowed(s, surface) {return false}
+	sh.grab_dismiss(s.shell)
+	return true
+}
+popup_grab_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+	context = runtime.default_context()
+	s := wl.owner(listener, Server, "popup_grab")
+	surface := sh.grab_surface(s.shell)
+	if surface != nil {
+		if !s.popup_grab_active {
+			s.popup_previous = s.seat.keyboard_state.focused_surface
+			if s.popup_previous !=
+			   nil {wl.listen(&s.popup_previous.events.destroy, &s.popup_previous_destroy, popup_previous_gone)}
+			s.popup_grab_active = true
+		}
+		enter_surface(s, surface)
+	} else if s.popup_grab_active {
+		previous := s.popup_previous
+		wl.unlisten(&s.popup_previous_destroy)
+		s.popup_previous, s.popup_grab_active = nil, false
+		if !locked(s) && !s.shutting_down {
+			if previous !=
+			   nil {enter_surface(s, previous)} else {wlr.wlr_seat_keyboard_notify_clear_focus(s.seat)}
+		}
+	}
+	pointer_target_refresh(s)
+}
+popup_previous_gone :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+	context = runtime.default_context()
+	s := wl.owner(listener, Server, "popup_previous_destroy")
+	wl.unlisten(&s.popup_previous_destroy)
+	s.popup_previous = nil
 }

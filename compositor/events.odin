@@ -87,7 +87,7 @@ queue_client :: proc(view: ^View, name: string, replay := false) {
 		e.title, e.has_title = string(title), title != nil
 		if t := xdg(view);
 		   t !=
-		   nil {e.app_id, e.has_app_id = string(t.app_id), t.app_id != nil} else if x := x11(view); x != nil {
+		   nil {e.app_id, e.has_app_id = string(t.app_id), t.app_id != ""} else if x := x11(view); x != nil {
 			xs := x.handle
 			e.role, e.icon = x.role, x.icon
 			types = x11_types(x)

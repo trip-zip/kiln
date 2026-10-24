@@ -1,21 +1,24 @@
 package compositor
 
+import sh "../shells"
+import "core:strings"
+
 import wlr "../wlroots"
 
-xdg :: proc(v: ^View) -> ^wlr.wlr_xdg_toplevel { t,_:=v.protocol.(^wlr.wlr_xdg_toplevel);return t }
+xdg :: proc(v: ^View) -> ^sh.Toplevel { t,_:=v.protocol.(^sh.Toplevel);return t }
 x11 :: proc(v: ^View) -> ^X11_View { x,_:=v.protocol.(^X11_View);return x }
 view_surface :: proc(v: ^View) -> ^wlr.wlr_surface {
-    if t:=xdg(v);t!=nil { return t.base.surface }
+    if t:=xdg(v);t!=nil { return t.surface }
     if x:=x11(v);x!=nil { return x.surface }
     return nil
 }
 view_title_text :: proc(v: ^View) -> cstring {
-    if t:=xdg(v);t!=nil { return t.title }
+    if t:=xdg(v);t!=nil { return strings.clone_to_cstring(t.title, context.temp_allocator) if t.title != "" else nil }
     if x:=x11(v);x!=nil { return x.handle.title }
     return nil
 }
 view_app_text :: proc(v: ^View) -> cstring {
-    if t:=xdg(v);t!=nil { return t.app_id }
+    if t:=xdg(v);t!=nil { return strings.clone_to_cstring(t.app_id, context.temp_allocator) if t.app_id != "" else nil }
     if x:=x11(v);x!=nil { return x.handle.class }
     return nil
 }
@@ -23,7 +26,7 @@ view_override_redirect :: proc(v: ^View) -> bool {
     x:=x11(v);return x!=nil && x.handle.override_redirect
 }
 view_geometry :: proc(v: ^View) -> wlr.wlr_box {
-    if t:=xdg(v);t!=nil { return t.base.geometry }
+    if t:=xdg(v);t!=nil { return t.geometry }
     if surface:=view_surface(v);surface!=nil { return {width=surface.current.width,height=surface.current.height} }
     return {}
 }
@@ -46,18 +49,18 @@ view_states :: proc(v: ^View, replay: bool) -> (full,maxed,minimized: bool) {
     return
 }
 view_activate :: proc(v: ^View, on: bool) {
-    if t:=xdg(v);t!=nil { wlr.wlr_xdg_toplevel_set_activated(t,on) }
+    if t:=xdg(v);t!=nil { sh.set_activated(t,on) }
     else if x:=x11(v);x!=nil { wlr.xwayland_activate(x.handle,on) }
 }
 view_close :: proc(v: ^View) {
-    if t:=xdg(v);t!=nil { wlr.wlr_xdg_toplevel_send_close(t) }
+    if t:=xdg(v);t!=nil { sh.send_close(t) }
     else if x:=x11(v);x!=nil { wlr.xwayland_close(x.handle) }
 }
 view_fullscreen_hint :: proc(v: ^View, on: bool) {
-    if t:=xdg(v);t!=nil { wlr.wlr_xdg_toplevel_set_fullscreen(t,on) }
+    if t:=xdg(v);t!=nil { sh.set_fullscreen(t,on) }
     else if x:=x11(v);x!=nil { x.granted_fullscreen=on;wlr.xwayland_fullscreen(x.handle,on) }
 }
 view_maximize_hint :: proc(v: ^View, on: bool) {
-    if t:=xdg(v);t!=nil { wlr.wlr_xdg_toplevel_set_maximized(t,on) }
+    if t:=xdg(v);t!=nil { sh.set_maximized(t,on) }
     else if x:=x11(v);x!=nil { x.granted_maximized=on;wlr.xwayland_maximize(x.handle,on) }
 }

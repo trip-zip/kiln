@@ -1,5 +1,6 @@
 package scene_paint
 
+import sh "../shells"
 import wl "../wayland"
 import wlr "../wlroots"
 import "base:runtime"
@@ -97,20 +98,21 @@ collect_surface :: proc "c" (surface: ^wlr.Surface, x, y: i32, data: rawptr) {
 	context = runtime.default_context()
 	append((^[dynamic]Surface_Position)(data), Surface_Position{surface = surface, x = x, y = y})
 }
-// wlroots owns ordering and geometry; this temporary list lasts only for the call.
+collect_popup :: proc(surface: ^wlr.Surface, x,y: i32, data: rawptr) {
+	append((^[dynamic]Surface_Position)(data), Surface_Position{surface=surface,x=x,y=y})
+}
 current_surfaces :: proc(p: Part) -> [dynamic]Surface_Position {
 	list := make([dynamic]Surface_Position, context.temp_allocator)
 	if p.surface == nil || !p.surface.mapped {return list}
 	wlr.surface_each(p.surface, collect_surface, &list)
 	base := len(list)
-	if p.xdg != nil {wlr.xdg_popups(p.xdg, collect_surface, &list)}
-	if p.layer != nil {wlr.layer_popups(p.layer, collect_surface, &list)}
+	sh.popups(p.surface, collect_popup, &list)
 	for &position, i in list {
 		position.x += p.box.x
 		position.y += p.box.y
-		if p.xdg != nil {
-			position.x -= p.xdg.geometry.x
-			position.y -= p.xdg.geometry.y
+		if p.geometry != (wlr.Box{}) {
+			position.x -= p.geometry.x
+			position.y -= p.geometry.y
 		}
 		position.popup = i >= base
 	}

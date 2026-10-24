@@ -1,5 +1,7 @@
 package compositor
 
+import sh "../shells"
+
 import layout "../layout"
 import vm "../lua_runtime"
 import sp "../scene_paint"
@@ -15,9 +17,9 @@ layer_facts_own_payloads_and_reject_dead_map_cycles :: proc(t: ^testing.T) {
 	}
 	testing.expect(t, vm.init(&s.lua))
 	defer destroy(&s)
-	namespace := strings.clone_to_cstring("copied")
+	namespace := strings.clone("copied")
 	defer delete(namespace)
-	native := wlr.wlr_layer_surface_v1 {
+	native := sh.Layer_Surface {
 		namespace = namespace,
 		initialized = true,
 		current = {desired_width = 90, desired_height = 40, anchor = 13, exclusive_zone = 30},
@@ -30,7 +32,7 @@ layer_facts_own_payloads_and_reject_dead_map_cycles :: proc(t: ^testing.T) {
 	}
 	append(&s.layers, &l)
 	queue_layer(&l, "map")
-	(([^]u8)(namespace))[0] = 'X'
+	raw_data(namespace)[0] = 'X'
 	testing.expect_value(t, s.events[0].namespace, "copied")
 	testing.expect(t, !s.events[0].has_output && valid_layer_event(&s, &s.events[0]))
 	l.epoch += 1
@@ -58,7 +60,7 @@ layer_identity_and_clay_order_are_retained :: proc(t: ^testing.T) {
 	}
 	defer {clear_chrome(&output)
 		sp.output_finish(&output.paint)}
-	native: wlr.wlr_layer_surface_v1
+	native: sh.Layer_Surface
 	l := Layer {
 		server = &s,
 		handle = &native,
@@ -106,7 +108,7 @@ layer_output_removal_preserves_only_compositor_selected_owners :: proc(t: ^testi
 		handle = &next_handle,
 	}
 	append(&s.outputs, &next)
-	native := wlr.wlr_layer_surface_v1 {
+	native := sh.Layer_Surface {
 		output = &old_handle,
 	}
 	l := Layer {

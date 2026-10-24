@@ -1,5 +1,7 @@
 package compositor
 
+import sh "../shells"
+
 import ext "../extensions"
 
 import sp "../scene_paint"
@@ -15,7 +17,7 @@ import "core:fmt"
 View :: struct {
 	server:                                                                                  ^Server,
 	protocol:                                                                                union {
-		^wlr.wlr_xdg_toplevel,
+		^sh.Toplevel,
 		^X11_View,
 	},
 	allocator:                                                                               runtime.Allocator,
@@ -30,7 +32,7 @@ View :: struct {
 	foreign_activate,
 	foreign_fullscreen,
 	foreign_close: wl.Listener,
-	decoration:                                                                              ^wlr.wlr_xdg_toplevel_decoration_v1,
+	decoration:                                                                              ^sh.Decoration,
 	decoration_requested:                                                                    bool,
 	decoration_mode:                                                                         i32,
 	decoration_request,
@@ -71,14 +73,14 @@ focus :: proc(view: ^View) {
 view_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	s := wl.owner(listener, Server, "new_toplevel")
-	toplevel := (^wlr.wlr_xdg_toplevel)(data)
+	toplevel := (^sh.Toplevel)(data)
 	view := new(View)
 	view.server, view.protocol = s, toplevel
 	view.allocator = context.allocator
 	s.next_view_id += 1
 	view.id = s.next_view_id
 	append(&s.views, view)
-	events := &toplevel.base.surface.events
+	events := &toplevel.surface.events
 	wl.listen(&events.map_, &view.map_, view_map)
 	wl.listen(&events.unmap, &view.unmap, view_unmap)
 	wl.listen(&events.commit, &view.commit, view_commit)
@@ -123,13 +125,16 @@ view_unmap :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 view_commit :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	view := wl.owner(listener, View, "commit")
-	if view.output != nil {sp.client_damage(&view.output.paint, view.id)}
-	if t := xdg(view); t != nil && t.base.initial_commit {
-		if wl.resource_version(xdg(view).resource) >=
-		   2 {wlr.wlr_xdg_toplevel_set_tiled(xdg(view), 15)}
-		wlr.wlr_xdg_toplevel_set_size(xdg(view), 0, 0)
+	if view.output != nil {
+		if t := xdg(view); t != nil { sp.client_damage(&view.output.paint, view.id, &t.geometry) }
+		else { sp.client_damage(&view.output.paint, view.id) }
 	}
-	if xdg(view) != nil {wlr.decoration_server_mode(view.decoration)}
+	if t := xdg(view); t != nil && t.initial_commit {
+		if wl.resource_version(xdg(view).resource) >=
+		   2 {sh.set_tiled(xdg(view), 15)}
+		sh.set_size(xdg(view), 0, 0)
+	}
+	if xdg(view) != nil {sh.decoration_server_mode(view.decoration)}
 	if !view_override_redirect(view) {record_size(view)}
 }
 record_size :: proc(view: ^View) {
@@ -180,8 +185,8 @@ view_destroy :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 
 // State requests need a configure reply even when the policy declines them.
 reply_state :: proc(view: ^View) {
-	if t := xdg(view); t != nil && t.base.initialized {
-		wlr.wlr_xdg_surface_schedule_configure(xdg(view).base)
+	if t := xdg(view); t != nil && t.initialized {
+		sh.schedule_configure(xdg(view))
 	}
 }
 view_maximize :: proc "c" (listener: ^wl.Listener, data: rawptr) {
@@ -208,7 +213,7 @@ clear_focus :: proc(s: ^Server) {
 		s.focused = nil
 		queue_event(s, vm.Event{class = "input", name = "focus"})
 	}
-	if s.seat != nil && !locked(s) {wlr.wlr_seat_keyboard_notify_clear_focus(s.seat)}
+	if s.seat != nil && !locked(s) && sh.grab_surface(s.shell) == nil {wlr.wlr_seat_keyboard_notify_clear_focus(s.seat)}
 }
 view_minimize :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
@@ -227,7 +232,9 @@ view_app_id :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	queue_client(v, "metadata")
 }
 
-enter_surface :: proc(s: ^Server, surface: ^wlr.wlr_surface) {
+enter_surface :: proc(s: ^Server, target: ^wlr.wlr_surface) {
+	surface := target
+	if grabbed := sh.grab_surface(s.shell); grabbed != nil {surface = grabbed}
 	if locked(s) {return}
 	if !s.keyboard_grabbed {
 		if kb := wlr.wlr_seat_get_keyboard(s.seat); kb != nil {

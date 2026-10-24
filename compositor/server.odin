@@ -1,5 +1,7 @@
 package compositor
 
+import sh "../shells"
+
 import ext "../extensions"
 import auth "../authentication"
 import services "../desktop_bus"
@@ -22,7 +24,7 @@ Server :: struct {
 	lock_owner:                                                                           Lock_Owner,
 	lock_generation:                                                                      u64,
 	authenticated, lock_acknowledged:                                                     bool,
-	ext_lock:                                                                             ^wlr.wlr_session_lock_v1,
+	ext_lock:                                                                             ^sh.Lock,
 	new_lock, lock_new_surface, lock_unlock, lock_destroy:                                wl.Listener,
 	lock_surfaces:                                                                        [dynamic]^Lock_Surface,
 	idle_notifier:                                                                        ^ext.Idle_Notifier,
@@ -56,13 +58,13 @@ Server :: struct {
 	xdg_output:                                                                           ^ext.Xdg_Output_Manager,
 	gamma:                                                                                ^ext.Gamma,
 	layout:                                                                               ^wlr.wlr_output_layout,
-	shell:                                                                                ^wlr.wlr_xdg_shell,
+	shell:                                                                                ^sh.Shell,
 	xwayland:                                                                             ^wlr.wlr_xwayland,
 	x11_atoms:                                                                            [21]u32,
 	xwayland_ready, xwayland_start, xwayland_destroy, new_xwayland_surface:               wl.Listener,
 	xwayland_watch:                                                                       ^wl.Event_Source,
 	xwayland_polls:                                                                       int,
-	layer_shell:                                                                          ^wlr.wlr_layer_shell_v1,
+	layer_shell:                                                                          ^sh.Layer_Shell,
 	activation:                                                                           ^ext.Activation,
 	foreign_manager:                                                                      ^ext.Foreign_Manager,
 	request_activate:                                                                     wl.Listener,
@@ -79,6 +81,9 @@ Server :: struct {
 	cursor_name_allocator:                                                                runtime.Allocator,
 	cursor_named:                                                                         bool,
 	next_pointer:                                                                         u64,
+	popup_grab, popup_previous_destroy: wl.Listener,
+	popup_previous: ^wlr.Surface,
+	popup_grab_active: bool,
 	new_toplevel, new_popup, new_input:                                                   wl.Listener,
 	cursor_motion, cursor_absolute, cursor_button, cursor_axis, cursor_frame:             wl.Listener,
 	request_cursor, request_selection:                                                    wl.Listener,
@@ -159,6 +164,8 @@ destroy :: proc(s: ^Server) {
 	delete(s.constraint_owners)
 	wl.unlisten(&s.new_toplevel)
 	wl.unlisten(&s.new_popup)
+	wl.unlisten(&s.popup_grab)
+	wl.unlisten(&s.popup_previous_destroy)
 	wl.unlisten(&s.new_layer)
 	wl.unlisten(&s.new_decoration)
 	wl.unlisten(&s.new_input)
@@ -255,15 +262,16 @@ run :: proc(startup_command := "") -> bool {
 	if s.screencopy == nil {return false}
 	s.gamma = ext.gamma_create(s.display, output_gamma, s.scene)
 	if s.gamma == nil {return false}
-	s.shell = wlr.wlr_xdg_shell_create(s.display, 6)
+	s.shell = sh.xdg_shell_create(s.display)
 	if s.shell == nil {return false}
 	wl.listen(&s.shell.events.new_toplevel, &s.new_toplevel, view_added)
 	wl.listen(&s.shell.events.new_popup, &s.new_popup, popup_added)
-	s.layer_shell = wlr.layer_shell_create(s.display)
+	wl.listen(&s.shell.events.grab_changed, &s.popup_grab, popup_grab_changed)
+	s.layer_shell = sh.layer_shell_create(s.display)
 	if s.layer_shell == nil {return false}
 	wl.listen(&s.layer_shell.events.new_surface, &s.new_layer, layer_added)
-	deco := wlr.decoration_create(s.display)
-	if deco == nil || !wlr.decoration_legacy_create(s.display) {return false}
+	deco := sh.decoration_create(s.display)
+	if deco == nil {return false}
 	wl.listen(&deco.events.new_toplevel_decoration, &s.new_decoration, decoration_added)
 	if !init_input(&s) {return false}
 	if !init_idle(&s) {return false}

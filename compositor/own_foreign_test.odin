@@ -1,5 +1,7 @@
 package compositor
 
+import sh "../shells"
+
 import ext "../extensions"
 import p "../protocols"
 import wl "../wayland"
@@ -45,8 +47,7 @@ owned_foreign_late_binding_batching_requests_and_stop :: proc(t: ^testing.T) {
 	extension_hold_events(s)
 	o := Output{handle = foreign_test_output(s)}
 	s.foreign_manager = ext.foreign_manager_create(s.display)
-	base: wlr.wlr_xdg_surface
-	top := wlr.wlr_xdg_toplevel{base = &base, title = "Initial title", app_id = "org.example.Editor"}
+	top := sh.Toplevel{ title = "Initial title", app_id = "org.example.Editor"}
 	view := View{id = 91, server = s, protocol = &top, output = &o, mapped = true}
 	// View callbacks enter with the default context; extension storage belongs to the display.
 	{

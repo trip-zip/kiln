@@ -107,7 +107,7 @@ reconcile :: proc(output: ^Output, original: []layout.Command) -> bool {
 					foreign_place(view, output)
 				}
 				part.surface = view_surface(view)
-				if top := xdg(view); top != nil {part.xdg = top.base}
+				if top := xdg(view); top != nil {part.geometry = top.geometry}
 			} else {
 				l := find_layer(output.server, content.id)
 				if l == nil || !l.mapped {continue}
@@ -119,7 +119,7 @@ reconcile :: proc(output: ^Output, original: []layout.Command) -> bool {
 					l.output = output
 					if !l.explicit_output {l.handle.output = output.handle}
 				}
-				part.surface, part.layer = l.handle.surface, l.handle
+				part.surface = l.handle.surface
 			}
 			append(&parts, part)
 		} else {

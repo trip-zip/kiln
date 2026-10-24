@@ -1,5 +1,7 @@
 package compositor
 
+import sh "../shells"
+
 
 import vm "../lua_runtime"
 import wl "../wayland"
@@ -18,14 +20,12 @@ queued_snapshots_replay_order_and_shutdown :: proc(t: ^testing.T) {
 		"events={};core.set_event_handler(function(e) events[#events+1]=e;collectgarbage('collect') end)",
 	)
 	delete(reply)
-	base := wlr.wlr_xdg_surface {
-		geometry = {0, 0, 30, 40},
-	}
+
 	title := strings.clone_to_cstring("first")
 	defer delete(title)
-	toplevel := wlr.wlr_xdg_toplevel {
-		base   = &base,
-		title  = title,
+	toplevel := sh.Toplevel {
+		geometry = {0, 0, 30, 40},
+		title  = string(title),
 		app_id = "test",
 	}
 
@@ -85,11 +85,9 @@ size_facts_change_once_without_dirtying :: proc(t: ^testing.T) {
 	testing.expect(t, s.display != nil)
 	defer destroy(&s)
 	output: Output
-	base := wlr.wlr_xdg_surface {
+
+	toplevel := sh.Toplevel {
 		geometry = {0, 0, 100, 80},
-	}
-	toplevel := wlr.wlr_xdg_toplevel {
-		base = &base,
 	}
 	view := View {
 		server   = &s,
@@ -102,13 +100,13 @@ size_facts_change_once_without_dirtying :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(s.events), 1)
 	testing.expect_value(t, s.events[0].name, "commit_size")
 	testing.expect_value(t, s.events[0].width, 100)
-	base.geometry.width = 200
+	toplevel.geometry.width = 200
 	record_size(&view)
 	testing.expect_value(t, len(s.events), 2)
 	testing.expect_value(t, s.events[1].width, 200)
 	testing.expect(t, !output.dirty)
 	view.mapped = false
-	base.geometry.width = 300
+	toplevel.geometry.width = 300
 	record_size(&view)
 	testing.expect_value(t, len(s.events), 2)
 }
@@ -256,14 +254,12 @@ replay_uses_current_hints_parent_and_map_lifetime :: proc(t: ^testing.T) {
 	s.display = wl.create()
 	testing.expect(t, vm.init(&s.lua))
 	defer destroy(&s)
-	base := wlr.wlr_xdg_surface {
+
+	parent_top := sh.Toplevel {
 		geometry = {0, 0, 60, 70},
 	}
-	parent_top := wlr.wlr_xdg_toplevel {
-		base = &base,
-	}
-	top := wlr.wlr_xdg_toplevel {
-		base = &base,
+	top := sh.Toplevel {
+		geometry = {0, 0, 60, 70},
 		parent = &parent_top,
 		current = {fullscreen = true},
 		requested = {maximized = true, minimized = true},

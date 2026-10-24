@@ -7,6 +7,7 @@ import layout "../layout"
 import auth "../authentication"
 import "../keymap"
 import vm "../lua_runtime"
+import sh "../shells"
 import wl "../wayland"
 import wlr "../wlroots"
 import "base:runtime"
@@ -18,13 +19,13 @@ Lock_Owner :: enum {
 }
 Lock_Surface :: struct {
 	server:                       ^Server,
-	handle:                       ^wlr.wlr_session_lock_surface_v1,
+	handle:                       ^sh.Lock_Surface,
 	width, height:                i32,
 	map_, unmap, destroy, commit: wl.Listener,
 }
 locked :: proc(s: ^Server) -> bool {return s.lock_owner != .Unlocked}
 init_lock :: proc(s: ^Server) -> bool {
-	manager := wlr.lock_manager_create(s.display)
+	manager := sh.lock_manager_create(s.display)
 	if manager == nil {return false}
 	wl.listen(&manager.events.new_lock, &s.new_lock, lock_added)
 	return true
@@ -44,7 +45,7 @@ lock_cover :: proc(s: ^Server) {
 				w, h := wlr.output_logical_size(o.handle)
 				if p.width != w || p.height != h {
 					p.width, p.height = w, h
-					wlr.lock_configure(p.handle, w, h)
+					sh.lock_configure(p.handle, w, h)
 				}
 				if p.handle.surface.mapped {
 					append(
@@ -72,6 +73,7 @@ lock_reset_input :: proc(s: ^Server) {
 		if !consumed {wlr.wlr_seat_pointer_notify_button(s.seat, 0, code, 0)}
 		s.buttons[code] = true
 	}
+	sh.grab_dismiss(s.shell)
 	wlr.seat_end_grabs(s.seat)
 	wlr.wlr_seat_keyboard_notify_clear_focus(s.seat)
 	wlr.wlr_seat_pointer_clear_focus(s.seat)
@@ -129,7 +131,7 @@ lock_maybe_ack :: proc(s: ^Server) {
 	if s.lock_owner != .External || s.ext_lock == nil || s.lock_acknowledged {return}
 	for o in s.outputs {if o.handle.enabled && !o.lock_presented {return}}
 	s.lock_acknowledged = true
-	wlr.lock_acknowledge(s.ext_lock)
+	sh.lock_acknowledge(s.ext_lock)
 }
 lock_presented :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
@@ -143,8 +145,8 @@ lock_presented :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 lock_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	s := wl.owner(listener, Server, "new_lock")
-	h := (^wlr.wlr_session_lock_v1)(data)
-	if locked(s) {wlr.lock_reject(h)
+	h := (^sh.Lock)(data)
+	if locked(s) {sh.lock_reject(h)
 		return}
 	s.ext_lock = h
 	s.lock_acknowledged = false
@@ -191,7 +193,7 @@ lock_surface_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	s := wl.owner(listener, Server, "lock_new_surface")
 	p := new(Lock_Surface)
 	p.server = s
-	p.handle = (^wlr.wlr_session_lock_surface_v1)(data)
+	p.handle = (^sh.Lock_Surface)(data)
 	append(&s.lock_surfaces, p)
 	wl.listen(&p.handle.surface.events.commit, &p.commit, lock_surface_committed)
 	wl.listen(&p.handle.events.destroy, &p.destroy, lock_surface_destroyed)
@@ -199,7 +201,7 @@ lock_surface_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	wl.listen(&p.handle.surface.events.unmap, &p.unmap, lock_surface_unmapped)
 	// Disabled outputs still need an initial configure to complete the role handshake.
 	p.width, p.height = wlr.output_logical_size(p.handle.output)
-	wlr.lock_configure(p.handle, p.width, p.height)
+	sh.lock_configure(p.handle, p.width, p.height)
 	lock_cover(s)
 }
 lock_surface_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {

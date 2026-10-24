@@ -1,5 +1,6 @@
 package compositor
 
+import sh "../shells"
 import sp "../scene_paint"
 
 import wl "../wayland"
@@ -9,7 +10,7 @@ import "base:runtime"
 Popup :: struct {
 	allocator:                                runtime.Allocator,
 	server:                                   ^Server,
-	handle:                                   ^wlr.wlr_xdg_popup,
+	handle:                                   ^sh.Popup,
 	root:                                     u32,
 	mapped:                                   bool,
 	last_x, last_y:                           i32,
@@ -19,7 +20,7 @@ root_placement :: proc(s: ^Server, id: u32) -> (sp.Part, ^Output, i32, i32) {
 	for v in s.views {
 		if v.id == id && v.mapped && v.output != nil && xdg(v) != nil {
 			if p, ok := sp.find_client(&v.output.paint, id); ok {
-				return p, v.output, xdg(v).base.geometry.x, xdg(v).base.geometry.y
+				return p, v.output, xdg(v).geometry.x, xdg(v).geometry.y
 			}
 		}
 	}
@@ -47,11 +48,11 @@ popup_attach :: proc(p: ^Popup) {
 	for l in s.layers {if l.handle.surface == p.handle.parent {p.root = l.id
 			return}}
 	for other in s.popups {
-		if other != p && other.handle.base.surface == p.handle.parent {p.root = other.root
+		if other != p && other.handle.surface == p.handle.parent {p.root = other.root
 			return}
 	}
 }
-popup_register :: proc(s: ^Server, handle: ^wlr.wlr_xdg_popup) {
+popup_register :: proc(s: ^Server, handle: ^sh.Popup) {
 	for p in s.popups {if p.handle == handle {popup_attach(p)
 			return}}
 	p := new(Popup)
@@ -60,19 +61,15 @@ popup_register :: proc(s: ^Server, handle: ^wlr.wlr_xdg_popup) {
 	p.handle = handle
 	append(&s.popups, p)
 	popup_attach(p)
-	wl.listen(&handle.base.surface.events.commit, &p.commit, popup_commit)
-	wl.listen(&handle.base.surface.events.map_, &p.map_, popup_map)
-	wl.listen(&handle.base.surface.events.unmap, &p.unmap, popup_unmap)
+	wl.listen(&handle.surface.events.commit, &p.commit, popup_commit)
+	wl.listen(&handle.surface.events.map_, &p.map_, popup_map)
+	wl.listen(&handle.surface.events.unmap, &p.unmap, popup_unmap)
 	wl.listen(&handle.events.destroy, &p.destroy, popup_destroy)
 	wl.listen(&handle.events.reposition, &p.reposition, popup_reposition)
 }
 popup_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
-	popup_register(wl.owner(listener, Server, "new_popup"), (^wlr.wlr_xdg_popup)(data))
-}
-layer_popup :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
-	popup_register(wl.owner(listener, Layer, "new_popup").server, (^wlr.wlr_xdg_popup)(data))
+	popup_register(wl.owner(listener, Server, "new_popup"), (^sh.Popup)(data))
 }
 popup_constrain :: proc(p: ^Popup, force := false) -> bool {
 	part, output, gx, gy := root_placement(p.server, p.root)
@@ -83,7 +80,7 @@ popup_constrain :: proc(p: ^Popup, force := false) -> bool {
 	// The xdg scene root is the geometry origin; the helper consumes surface coordinates.
 	box.x -= x - gx
 	box.y -= y - gy
-	wlr.popup_constrain(p.handle, box, force)
+	sh.popup_constrain(p.handle, box, force)
 	return true
 }
 popup_commit :: proc "c" (listener: ^wl.Listener, data: rawptr) {
@@ -96,9 +93,9 @@ popup_commit :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 		p.last_x, p.last_y = p.handle.current.geometry.x, p.handle.current.geometry.y
 		popup_dirty(p)
 	}
-	if p.handle.base.initial_commit {
+	if p.handle.initial_commit {
 		popup_attach(p)
-		if !popup_constrain(p, true) {wlr.wlr_xdg_surface_schedule_configure(p.handle.base)}
+		if !popup_constrain(p, true) {sh.popup_schedule_configure(p.handle)}
 	}
 }
 popup_reposition :: proc "c" (listener: ^wl.Listener, data: rawptr) {
@@ -135,6 +132,6 @@ popup_destroy :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 refresh_popups :: proc(output: ^Output) {
 	for p in output.server.popups {
 		_, owner, _, _ := root_placement(output.server, p.root)
-		if owner == output && p.handle.base.initialized {popup_constrain(p)}
+		if owner == output && p.handle.initialized {popup_constrain(p)}
 	}
 }

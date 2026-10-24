@@ -76,6 +76,8 @@ extension_finish :: proc(s: ^Server) {
 	for len(s.minted_tokens) > 0 { ext.activation_retire(s.minted_tokens[0].token) }
 	delete(s.minted_tokens)
 	delete(s.views)
+	delete(s.popups)
+	delete(s.layers)
 	wl.remove_source(s.idle_timer)
 	wl.remove_source(s.event_source)
 	for &event in s.events { free_event(&event) }

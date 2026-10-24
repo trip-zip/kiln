@@ -1,26 +1,26 @@
 package compositor
 
 import "core:time"
+import sh "../shells"
 import sp "../scene_paint"
 
 import layout "../layout"
 import vm "../lua_runtime"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:fmt"
 
 Layer :: struct {
 	allocator:                               runtime.Allocator,
 	server:                                  ^Server,
-	handle:                                  ^wlr.wlr_layer_surface_v1,
+	handle:                                  ^sh.Layer_Surface,
 	output:                                  ^Output,
 	id:                                      u32,
 	epoch:                                   u64,
 	explicit_output, mapped, configured:     bool,
 	width, height:                           u32,
 	watchdog:                                ^wl.Event_Source,
-	commit, map_, unmap, destroy, new_popup: wl.Listener,
+	commit, map_, unmap, destroy: wl.Listener,
 }
 find_layer :: proc(s: ^Server, id: u32) -> ^Layer {
 	if s == nil {return nil}
@@ -57,12 +57,12 @@ valid_layer_event :: proc(s: ^Server, e: ^vm.Event) -> bool {
 layer_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	s := wl.owner(listener, Server, "new_layer")
-	h := (^wlr.wlr_layer_surface_v1)(data)
+	h := (^sh.Layer_Surface)(data)
 	explicit := h.output != nil
 	// This association satisfies the protocol lifetime, not desktop placement.
 	// The requested-output fact remains absent until Lua chooses a scene owner.
 	if h.output == nil {
-		if len(s.outputs) == 0 {wlr.layer_close(h)
+		if len(s.outputs) == 0 {sh.layer_close(h)
 			return}
 		h.output = s.outputs[0].handle
 	}
@@ -77,7 +77,6 @@ layer_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	wl.listen(&h.surface.events.map_, &l.map_, layer_map)
 	wl.listen(&h.surface.events.unmap, &l.unmap, layer_unmap)
 	wl.listen(&h.events.destroy, &l.destroy, layer_destroy)
-	wl.listen(&h.events.new_popup, &l.new_popup, layer_popup)
 }
 layer_watchdog :: proc(data: rawptr) -> i32 {
 	l := (^Layer)(data)
@@ -127,7 +126,6 @@ layer_destroy :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context.allocator = l.allocator
 	queue_layer(l, "destroy")
 	wl.remove_source(l.watchdog)
-	wl.unlisten(&l.new_popup)
 	wl.unlisten(&l.commit)
 	wl.unlisten(&l.map_)
 	wl.unlisten(&l.unmap)
@@ -151,7 +149,7 @@ runtime_layer_configure :: proc(data: rawptr, id, width, height: u32) {
 	l.width = width
 	l.height = height
 	if l.watchdog != nil {wl.arm_timer(l.watchdog, 0)}
-	wlr.layer_configure(l.handle, width, height)
+	sh.layer_configure(l.handle, width, height)
 }
 // Output destruction cannot leave either a protocol association or scene parent dangling.
 remove_layer_output :: proc(s: ^Server, output: ^Output) {
@@ -159,7 +157,7 @@ remove_layer_output :: proc(s: ^Server, output: ^Output) {
 	for i < len(s.layers) {
 		l := s.layers[i]
 		if l.handle.output == output.handle {
-			if layer_output_closes(l, len(s.outputs) > 0) {wlr.layer_close(l.handle)
+			if layer_output_closes(l, len(s.outputs) > 0) {sh.layer_close(l.handle)
 				continue}
 			l.handle.output = s.outputs[0].handle
 		}

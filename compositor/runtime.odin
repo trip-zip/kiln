@@ -1,5 +1,7 @@
 package compositor
 
+import sh "../shells"
+
 import ext "../extensions"
 
 
@@ -204,7 +206,7 @@ runtime_suspend :: proc(data: rawptr, handle: u32, on: bool) {
 		   view.mapped &&
 		   xdg(view) != nil &&
 		   wl.resource_version(xdg(view).resource) >= 6 {
-			wlr.wlr_xdg_toplevel_set_suspended(xdg(view), on)
+			sh.set_suspended(xdg(view), on)
 			return
 		}
 	}
@@ -225,7 +227,7 @@ runtime_client_configure :: proc(data: rawptr, handle: u32, width, height: i32) 
 	for v in (^Server)(data).views {
 		if v.id != handle {continue}
 		if t := xdg(v); t != nil {
-			wlr.wlr_xdg_toplevel_set_size(t, width, height)
+			sh.set_size(t, width, height)
 		} else if x := x11(v); x != nil && !view_override_redirect(v) {
 			px, py: i32
 			view_position(v, &px, &py)
@@ -243,7 +245,7 @@ runtime_client_tiled :: proc(data: rawptr, handle, edges: u32) {
 	for v in (^Server)(data).views {
 		if v.id != handle {continue}
 		if t := xdg(v); t != nil && wl.resource_version(t.resource) >= 2 {
-			wlr.wlr_xdg_toplevel_set_tiled(t, edges)
+			sh.set_tiled(t, edges)
 		}
 		return
 	}

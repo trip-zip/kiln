@@ -1,5 +1,7 @@
 package compositor
 
+import sh "../shells"
+
 import ext "../extensions"
 import wl "../wayland"
 import wlr "../wlroots"
@@ -38,8 +40,7 @@ owned_activation_mints_serial_validation_and_single_use :: proc(t: ^testing.T) {
 	defer wl.connection_close(&b.peer)
 	extension_bind(&a, "xdg_activation_v1", 1, 7)
 	extension_bind(&b, "xdg_activation_v1", 1, 7)
-	base := wlr.wlr_xdg_surface{surface = ext.surface_of(wl.client_get_object(b.client, 6))}
-	top := wlr.wlr_xdg_toplevel{base = &base}
+	top := sh.Toplevel{surface = ext.surface_of(wl.client_get_object(b.client, 6))}
 	view := View{id = 77, server = s, protocol = &top, mapped = true}
 	append(&s.views, &view)
 	_, name := runtime_mint_token(s)
