@@ -238,7 +238,17 @@ texture :: proc(
 }
 
 submit :: proc(p: ^Pass) -> bool {
+	r := p.buffer.renderer
+	if r.lost {return false}
 	gl.Flush()
+	if r.reset_status != nil {
+		status := r.reset_status()
+		if status != gl.NO_ERROR {
+			fmt.eprintf("GLES: GPU reset, context lost (0x%04x)\n", status)
+			r.lost = true
+			return false
+		}
+	}
 	return gl.GetError() == gl.NO_ERROR
 }
 

@@ -117,7 +117,7 @@ when #config(KILN_OUTPUT_FIXTURE, false) {
 		case 30:
 			n: i64
 			for o in s.outputs {
-				if o.handle.swapchain != nil {n += 1}
+				if len(o.paint.swapchain.buffers) > 0 {n += 1}
 			}
 			return n
 		case 22:
@@ -173,7 +173,8 @@ when #config(KILN_OUTPUT_FIXTURE, false) {
 			return true
 		}
 		if action == 6 {
-			s.gamma.fallback_gamma_size = uintptr(a)
+			if a < 0 || a > 65536 { return false }
+			s.gamma.size = u32(a)
 			return true
 		}
 		if action == 2 || action == 3 {

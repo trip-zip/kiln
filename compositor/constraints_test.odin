@@ -12,7 +12,6 @@ queued_motion_uses_preceding_claim_and_copies_raw_deltas :: proc(t: ^testing.T) 
     s.seat=wlr.wlr_seat_create(s.display,"motion")
     s.layout=wlr.wlr_output_layout_create(s.display)
     s.cursor=wlr.wlr_cursor_create()
-    wlr.wlr_cursor_attach_output_layout(s.cursor,s.layout)
     s.cursor_manager=wlr.wlr_xcursor_manager_create(nil,24)
     s.lua.data=&s;s.lua.grab_pointer=runtime_grab_pointer
     testing.expect(t,vm.init(&s.lua))

@@ -16,7 +16,7 @@ wlr_drag :: struct #align(8) {
     _opaque_112: [8]u8,
     source: ^wlr_data_source,
     _opaque_128: [16]u8,
-    events: struct { focus,motion,drop,destroy: wl.Signal },
+    events: struct { _opaque_0: [48]u8, destroy: wl.Signal },
     _opaque_208: [104]u8,
 }
 wlr_seat_request_start_drag_event :: struct {
@@ -46,9 +46,6 @@ pointer_drag_request :: proc(seat: ^wlr_seat, event: ^wlr_seat_request_start_dra
 #assert(size_of(wlr_drag)==312 && align_of(wlr_drag)==8)
 #assert(offset_of(wlr_drag,icon)==104 && offset_of(wlr_drag,source)==120 && offset_of(wlr_drag,events)==144)
 #assert(size_of(type_of(wlr_drag{}.events))==64 && align_of(type_of(wlr_drag{}.events))==8)
-#assert(offset_of(type_of(wlr_drag{}.events),focus)==0)
-#assert(offset_of(type_of(wlr_drag{}.events),motion)==16)
-#assert(offset_of(type_of(wlr_drag{}.events),drop)==32)
 #assert(offset_of(type_of(wlr_drag{}.events),destroy)==48)
 #assert(size_of(wlr_seat_request_start_drag_event)==24 && align_of(wlr_seat_request_start_drag_event)==8)
 #assert(offset_of(wlr_seat_request_start_drag_event,drag)==0 && offset_of(wlr_seat_request_start_drag_event,origin)==8)

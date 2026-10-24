@@ -5,7 +5,7 @@ import wl "../wayland"
 
 wlr_session_lock_manager_v1 :: struct #align(8) {
     _opaque_0: [8]u8,
-    events: struct { new_lock, destroy: wl.Signal },
+    events: struct { new_lock: wl.Signal, _opaque_16: [16]u8 },
     _opaque_40: [32]u8,
 }
 wlr_session_lock_v1 :: struct #align(8) {
@@ -22,7 +22,7 @@ wlr_session_lock_surface_v1 :: struct #align(8) {
     _opaque_104: [72]u8,
 }
 wlr_output_event_present :: struct #align(8) {
-    output: ^wlr_output,
+    _opaque_0: [8]u8,
     commit_seq: u32,
     presented: bool,
     _opaque_13: [35]u8,
@@ -42,7 +42,7 @@ foreign lock_lib {
 #assert(size_of(wlr_session_lock_manager_v1)==72 && align_of(wlr_session_lock_manager_v1)==8)
 #assert(offset_of(wlr_session_lock_manager_v1,events)==8)
 #assert(size_of(type_of(wlr_session_lock_manager_v1{}.events))==32 && align_of(type_of(wlr_session_lock_manager_v1{}.events))==8)
-#assert(offset_of(type_of(wlr_session_lock_manager_v1{}.events),new_lock)==0 && offset_of(type_of(wlr_session_lock_manager_v1{}.events),destroy)==16)
+#assert(offset_of(type_of(wlr_session_lock_manager_v1{}.events),new_lock)==0)
 #assert(size_of(wlr_session_lock_v1)==88 && align_of(wlr_session_lock_v1)==8)
 #assert(offset_of(wlr_session_lock_v1,events)==24)
 #assert(size_of(type_of(wlr_session_lock_v1{}.events))==48 && align_of(type_of(wlr_session_lock_v1{}.events))==8)
@@ -52,4 +52,4 @@ foreign lock_lib {
 #assert(size_of(type_of(wlr_session_lock_surface_v1{}.events))==16 && align_of(type_of(wlr_session_lock_surface_v1{}.events))==8)
 #assert(offset_of(type_of(wlr_session_lock_surface_v1{}.events),destroy)==0)
 #assert(size_of(wlr_output_event_present)==48 && align_of(wlr_output_event_present)==8)
-#assert(offset_of(wlr_output_event_present,output)==0 && offset_of(wlr_output_event_present,commit_seq)==8 && offset_of(wlr_output_event_present,presented)==12)
+#assert(offset_of(wlr_output_event_present,commit_seq)==8 && offset_of(wlr_output_event_present,presented)==12)

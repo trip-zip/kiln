@@ -1,5 +1,7 @@
 package compositor
 
+import ext "../extensions"
+
 
 import layout "../layout"
 import vm "../lua_runtime"
@@ -134,7 +136,7 @@ runtime_focus :: proc(data: rawptr, handle: u32) {
 runtime_activate :: proc(data: rawptr, handle: u32, on: bool) {
 	if locked((^Server)(data)) {return}
 	for view in (^Server)(data).views {
-		if view.id == handle && view.mapped {wlr.foreign_activated(view.foreign_handle, on)
+		if view.id == handle && view.mapped {ext.foreign_activated(view.foreign_handle, on)
 			view_activate(view, on)
 			return}
 	}
@@ -184,14 +186,14 @@ runtime_focus_target :: proc(data: rawptr) -> u32 {
 
 runtime_fullscreen :: proc(data: rawptr, handle: u32, on: bool) {
 	for view in (^Server)(data).views {
-		if view.id == handle && view.mapped {wlr.foreign_fullscreen(view.foreign_handle, on)
+		if view.id == handle && view.mapped {ext.foreign_fullscreen(view.foreign_handle, on)
 			view_fullscreen_hint(view, on)
 			return}
 	}
 }
 runtime_maximize :: proc(data: rawptr, handle: u32, on: bool) {
 	for view in (^Server)(data).views {
-		if view.id == handle && view.mapped {wlr.foreign_maximized(view.foreign_handle, on)
+		if view.id == handle && view.mapped {ext.foreign_maximized(view.foreign_handle, on)
 			view_maximize_hint(view, on)
 			return}
 	}
@@ -213,7 +215,7 @@ runtime_request_reload :: proc(data: rawptr) {
 }
 
 runtime_minimize :: proc(data: rawptr, handle: u32, on: bool) {
-	for v in (^Server)(data).views {if v.id == handle && v.mapped {wlr.foreign_minimized(v.foreign_handle, on)
+	for v in (^Server)(data).views {if v.id == handle && v.mapped {ext.foreign_minimized(v.foreign_handle, on)
 			if x := x11(v); x != nil {x.granted_minimized = on
 				wlr.xwayland_minimize(x.handle, on)}
 			return}}

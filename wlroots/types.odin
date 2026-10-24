@@ -1,6 +1,7 @@
 package wlroots
 
 import "core:c"
+import "core:sys/posix"
 import wl "../wayland"
 import xkb "../xkbcommon"
 
@@ -26,11 +27,13 @@ wlr_backend :: struct #align(8) {
 
 wlr_output_events :: struct #align(8) {
 	frame: wl.Signal,
-	damage, needs_frame: wl.Signal,
+	_opaque_16: [16]u8,
+	needs_frame: wl.Signal,
 	_opaque_48: [16]u8,
 	commit: wl.Signal,
 	present: wl.Signal,
-    _opaque_96: [32]u8,
+    bind: wl.Signal,
+	description: wl.Signal,
 	request_state: wl.Signal,
 	destroy: wl.Signal,
 }
@@ -39,9 +42,11 @@ wlr_output_events :: struct #align(8) {
 #assert(offset_of(wlr_output_events, request_state) == 128 && offset_of(wlr_output_events, destroy) == 144)
 
 wlr_output :: struct #align(8) {
-	_opaque_0: [48]u8,
+	_opaque_0: [32]u8,
+	resources: wl.List,
 	name: cstring,
-	_opaque_56: [48]u8,
+	description: cstring,
+	_opaque_64: [40]u8,
 	modes: wl.List,
 	_opaque_120: [8]u8,
 	width: i32,
@@ -64,6 +69,7 @@ wlr_output :: struct #align(8) {
     _opaque_464: [160]u8,
 }
 #assert(size_of(wlr_output) == 624 && align_of(wlr_output) == 8)
+#assert(offset_of(wlr_output, resources) == 32)
 #assert(offset_of(wlr_output, name) == 48 && offset_of(wlr_output, width) == 128)
 #assert(offset_of(wlr_output, height) == 132 && offset_of(wlr_output, events) == 192)
 #assert(offset_of(wlr_output, modes) == 104 && offset_of(wlr_output, refresh) == 136)
@@ -71,13 +77,12 @@ wlr_output :: struct #align(8) {
 #assert(offset_of(wlr_output, transform) == 160 && offset_of(wlr_output, adaptive_sync_status) == 164)
 
 WLR_OUTPUT_STATE_MODE :: u32(1 << 2)
+WLR_OUTPUT_STATE_BUFFER :: u32(1 << 0)
 WLR_OUTPUT_STATE_ENABLED :: u32(1 << 3)
 wlr_output_state_mode_type :: enum c.int {
  WLR_OUTPUT_STATE_MODE_FIXED,
- WLR_OUTPUT_STATE_MODE_CUSTOM,
 }
 WLR_OUTPUT_STATE_MODE_FIXED :: wlr_output_state_mode_type.WLR_OUTPUT_STATE_MODE_FIXED
-WLR_OUTPUT_STATE_MODE_CUSTOM :: wlr_output_state_mode_type.WLR_OUTPUT_STATE_MODE_CUSTOM
 #assert(size_of(wlr_output_state_mode_type) == 4)
 
 wlr_output_state :: struct #align(8) {
@@ -90,7 +95,8 @@ wlr_output_state :: struct #align(8) {
 	mode_type:   wlr_output_state_mode_type,
 	mode:        ^wlr_output_mode,
 	custom_mode: struct {
-		width, height, refresh: i32,
+		width, height: i32,
+		_opaque_8: [4]u8,
 	},
 	_opaque_140: [68]u8,
 }
@@ -100,6 +106,21 @@ wlr_output_event_request_state :: struct #align(8) {
 	_opaque_0: [8]u8,
 	state: ^wlr_output_state,
 }
+
+wlr_output_event_commit :: struct { output: ^wlr_output, when_: posix.timespec, state: ^wlr_output_state }
+#assert(size_of(wlr_output_event_commit) == 32 && align_of(wlr_output_event_commit) == 8)
+#assert(offset_of(wlr_output_event_commit, output) == 0 && offset_of(wlr_output_event_commit, when_) == 8)
+#assert(offset_of(wlr_output_event_commit, state) == 24)
+
+wlr_seat_client :: struct {
+	client: ^wl.Client,
+	seat: ^wlr_seat,
+	_opaque_16: [96]u8,
+	events: struct { destroy: wl.Signal },
+	_opaque_128: [1072]u8,
+}
+#assert(size_of(wlr_seat_client) == 1200 && align_of(wlr_seat_client) == 8)
+#assert(offset_of(wlr_seat_client, client) == 0 && offset_of(wlr_seat_client, seat) == 8)
 #assert(size_of(wlr_output_event_request_state) == 16 && align_of(wlr_output_event_request_state) == 8)
 #assert(offset_of(wlr_output_event_request_state, state) == 8)
 
@@ -134,13 +155,11 @@ wlr_xdg_surface :: struct #align(8) {
 	initial_commit: bool,
 	_opaque_170: [2]u8,
 	geometry: wlr_box,
-	_opaque_188: [84]u8,
-	data: rawptr,
-	_opaque_280: [64]u8,
+	_opaque_188: [156]u8,
 }
 #assert(size_of(wlr_xdg_surface) == 344 && align_of(wlr_xdg_surface) == 8)
 #assert(offset_of(wlr_xdg_surface, surface) == 16 && offset_of(wlr_xdg_surface, initialized) == 168)
-#assert(offset_of(wlr_xdg_surface, initial_commit) == 169 && offset_of(wlr_xdg_surface, data) == 272)
+#assert(offset_of(wlr_xdg_surface, initial_commit) == 169)
 #assert(offset_of(wlr_xdg_surface, geometry) == 172)
 
 wlr_xdg_toplevel_events :: struct #align(8) {
@@ -165,15 +184,12 @@ wlr_xdg_toplevel_requested :: struct #align(8) {
 #assert(offset_of(wlr_xdg_toplevel_requested, maximized) == 0 && offset_of(wlr_xdg_toplevel_requested, minimized) == 1)
 #assert(offset_of(wlr_xdg_toplevel_requested, fullscreen) == 2)
 
-wlr_xdg_toplevel_state :: struct {
-	maximized, fullscreen, resizing, activated, suspended: bool,
-	tiled, constrained: u32,
-	width, height, max_width, max_height, min_width, min_height: i32,
+wlr_xdg_toplevel_state :: struct #align(4) {
+	maximized, fullscreen: bool,
+	_opaque_2: [38]u8,
 }
 #assert(size_of(wlr_xdg_toplevel_state) == 40)
 #assert(offset_of(wlr_xdg_toplevel_state, maximized) == 0 && offset_of(wlr_xdg_toplevel_state, fullscreen) == 1)
-#assert(offset_of(wlr_xdg_toplevel_state, tiled) == 8 && offset_of(wlr_xdg_toplevel_state, constrained) == 12)
-#assert(offset_of(wlr_xdg_toplevel_state, width) == 16 && offset_of(wlr_xdg_toplevel_state, min_height) == 36)
 
 wlr_xdg_toplevel :: struct #align(8) {
 	resource: ^wl.Resource,
@@ -245,8 +261,8 @@ wlr_surface_state :: struct #align(8) {
 	buffer:                               ^wlr_buffer,
     dx,dy: i32,
     _opaque_24: [96]u8,
-    transform, scale: i32,
-    _opaque_128: [16]u8,
+    transform: i32,
+    _opaque_124: [20]u8,
 	width,height: i32,
 	_opaque_152: [8]u8,
     subsurfaces_below, subsurfaces_above: wl.List,
@@ -475,7 +491,7 @@ wlr_box :: struct { x, y, width, height: i32 }
 #assert(offset_of(wlr_box, x) == 0 && offset_of(wlr_box, y) == 4 && offset_of(wlr_box, width) == 8)
 #assert(offset_of(wlr_box, height) == 12)
 
-wlr_output_layout_events :: struct { add, change, destroy: wl.Signal }
+wlr_output_layout_events :: struct { _opaque_0: [16]u8, change, destroy: wl.Signal }
 #assert(size_of(wlr_output_layout_events) == 48)
 #assert(offset_of(wlr_output_layout_events, change) == 16)
 wlr_output_layout :: struct #align(8) {
@@ -504,3 +520,11 @@ wlr_output_layout :: struct #align(8) {
 
 #assert(offset_of(wlr_output_state, committed) == 0 && offset_of(wlr_output_state, enabled) == 32 && offset_of(wlr_output_state, buffer) == 56)
 #assert(offset_of(wlr_output_state, mode_type) == 116 && offset_of(wlr_output_state, mode) == 120 && offset_of(wlr_output_state, custom_mode) == 128)
+
+#assert(offset_of(wlr_output, description) == 56)
+#assert(offset_of(wlr_output_events, description) == 112)
+
+#assert(offset_of(wlr_seat_client, events) == 112)
+#assert(size_of(type_of(wlr_seat_client{}.events)) == 16 && offset_of(type_of(wlr_seat_client{}.events), destroy) == 0)
+
+#assert(offset_of(wlr_output_events, bind) == 96)

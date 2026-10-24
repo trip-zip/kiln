@@ -1,5 +1,6 @@
 package compositor
 
+import ext "../extensions"
 import layout "../layout"
 import vm "../lua_runtime"
 import sp "../scene_paint"
@@ -11,11 +12,8 @@ import "core:fmt"
 // Keep the state storage local so every failure releases its C-owned contents.
 enable_output :: proc(
 	output: ^wlr.wlr_output,
-	allocator: ^wlr.wlr_allocator,
-	renderer: ^wlr.wlr_renderer,
 	paint: ^sp.Output,
 ) -> bool {
-	if !wlr.wlr_output_init_render(output, allocator, renderer) {return false}
 	state: wlr.wlr_output_state
 	wlr.wlr_output_state_init(&state)
 	defer wlr.wlr_output_state_finish(&state)
@@ -62,7 +60,7 @@ output_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	fixture_name_output(handle)
 	output := new(Output)
 	output.paint.handle, output.paint.renderer = handle, s.gles
-	if !enable_output(handle, s.allocator, s.renderer, &output.paint) {
+	if !enable_output(handle, &output.paint) {
 		sp.output_finish(&output.paint)
 		free(output)
 		fail(s, "Failed to enable output")
@@ -87,6 +85,7 @@ output_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	wl.listen(&handle.events.destroy, &output.destroy, output_destroy)
 	layout_output := wlr.wlr_output_layout_add_auto(s.layout, handle)
 	sp.output_init(&output.paint, s.scene, handle, s.gles, s.layout)
+	output.paint.committed = output_readback
 	cursor_sync(s)
 	if layout_output == nil {
 		fail(s, "Failed to add output to scene")
@@ -158,6 +157,7 @@ output_destroy :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 			break
 		}
 	}
+	map_pointers(s)
 	remove_layer_output(s, output)
 	for view in s.views {
 		if view.output == output {
@@ -343,13 +343,17 @@ mode_matches :: proc(m: ^wlr.wlr_output_mode, wanted: vm.Output_Mode) -> bool {
 
 output_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
-	update_output_facts(wl.owner(listener, Output, "commit"))
+	o := wl.owner(listener, Output, "commit")
+	update_output_facts(o)
+	ext.xdg_output_update(o.server.xdg_output, o.handle)
 }
 
 output_layout_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	s := wl.owner(listener, Server, "layout_change")
 	for output in s.outputs {update_output_facts(output)}
+	ext.xdg_output_update(s.xdg_output)
+	if s.cursor != nil { cursor_position(s, s.cursor.x, s.cursor.y) }
 }
 
 output_commit_failed :: proc(output: ^Output) {
@@ -358,4 +362,13 @@ output_commit_failed :: proc(output: ^Output) {
 		return
 	}
 	fail(output.server, "Failed to commit output frame")
+}
+
+output_readback :: proc(paint: ^sp.Output, damage: []wlr.Box) {
+	o := runtime.container_of(paint, Output, "paint")
+	ext.screencopy_committed(o.server.screencopy, paint, damage)
+}
+
+output_gamma :: proc(data: rawptr, output: ^wlr.wlr_output, table: []u16) -> bool {
+	return sp.set_gamma(cast(^sp.Scene)data, output, table)
 }

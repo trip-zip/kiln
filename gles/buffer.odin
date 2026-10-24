@@ -72,9 +72,10 @@ buffer_create :: proc(r: ^Renderer, width, height: i32, format: u32, mods: []u64
 buffer_destroy :: proc(b: ^Buffer) {
 	if b == nil {return}
 	context.allocator = b.renderer.allocator
-	current(b.renderer)
-	gl.DeleteFramebuffers(1, &b.fbo)
-	gl.DeleteRenderbuffers(1, &b.rbo)
+	if current(b.renderer) {
+		gl.DeleteFramebuffers(1, &b.fbo)
+		gl.DeleteRenderbuffers(1, &b.rbo)
+	}
 	if b.image != egl.NO_IMAGE {egl.DestroyImage(b.renderer.display, b.image)}
 	gbm.release(b.bo)
 	for p in b.planes {
@@ -99,6 +100,7 @@ acquire :: proc(
 	format: u32,
 	mods: []u64,
 ) -> ^Buffer {
+	if r.lost {return nil}
 	same :=
 		s.width == width &&
 		s.height == height &&
@@ -134,26 +136,33 @@ acquire :: proc(
 }
 
 read :: proc(r: ^Renderer, b: ^Buffer, dest: rawptr, stride: u32) -> bool {
-	if b == nil || !current(r) || stride < u32(b.width * 4) {return false}
+	if b == nil {return false}
+	return read_region(r, b, dest, stride, {0, 0, b.width, b.height})
+}
+
+read_region :: proc(r: ^Renderer, b: ^Buffer, dest: rawptr, stride: u32, box: Box) -> bool {
+	if b == nil || box.x < 0 || box.y < 0 || box.width <= 0 || box.height <= 0 ||
+	   i64(box.x)+i64(box.width) > i64(b.width) || i64(box.y)+i64(box.height) > i64(b.height) ||
+	   stride < u32(box.width)*4 || !current(r) {return false}
 	// GL packs rows without the destination stride.
-	pixels := make([]u8, int(b.width) * int(b.height) * 4)
+	pixels := make([]u8, int(box.width) * int(box.height) * 4)
 	defer delete(pixels)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, b.fbo)
 	gl.PixelStorei(gl.PACK_ALIGNMENT, 1)
 	format := u32(gl.RGBA)
 	if r.bgra {format = GL_BGRA_EXT}
-	gl.ReadPixels(0, 0, b.width, b.height, format, gl.UNSIGNED_BYTE, raw_data(pixels))
+	gl.ReadPixels(box.x, box.y, box.width, box.height, format, gl.UNSIGNED_BYTE, raw_data(pixels))
 	if gl.GetError() != gl.NO_ERROR {return false}
 	// The pass projects directly into GBM row order, including readback.
-	for y in 0 ..< int(b.height) {
-		src := pixels[y * int(b.width) * 4:][:int(b.width) * 4]
+	for y in 0 ..< int(box.height) {
+		src := pixels[y * int(box.width) * 4:][:int(box.width) * 4]
 		dst := (cast([^]u8)dest)[y * int(stride):][:len(src)]
 		copy(dst, src)
 		if !r.bgra {
-			for x in 0 ..< int(b.width) {dst[x * 4], dst[x * 4 + 2] = dst[x * 4 + 2], dst[x * 4]}
+			for x in 0 ..< int(box.width) {dst[x * 4], dst[x * 4 + 2] = dst[x * 4 + 2], dst[x * 4]}
 		}
 		if b.format == gbm.XRGB8888 {
-			for x in 0 ..< int(b.width) {dst[x * 4 + 3] = 255}
+			for x in 0 ..< int(box.width) {dst[x * 4 + 3] = 255}
 		}
 	}
 	return true

@@ -290,7 +290,7 @@ cursor_absolute :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	idle_activity(s)
 	if locked(s) {return}
 	event := (^wlr.wlr_pointer_motion_absolute_event)(data)
-	x, y := wlr.absolute_position(s.cursor, &event.pointer.base, event.x, event.y)
+	x, y := cursor_absolute_position(s, event.pointer, event.x, event.y)
 	queue_event(
 		s,
 		vm.Event {
@@ -393,7 +393,6 @@ init_input :: proc(s: ^Server) -> bool {
 	if s.seat == nil {return false}
 	s.cursor = wlr.wlr_cursor_create()
 	if s.cursor == nil {return false}
-	wlr.wlr_cursor_attach_output_layout(s.cursor, s.layout)
 	s.cursor_manager = wlr.wlr_xcursor_manager_create(nil, 24)
 	if s.cursor_manager == nil {return false}
 	wl.listen(&s.cursor.events.motion, &s.cursor_motion, cursor_motion)

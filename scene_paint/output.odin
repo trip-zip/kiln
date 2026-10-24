@@ -17,8 +17,10 @@ Output :: struct {
 	damage:                   [dynamic]wlr.Box,
 	history:                  [dynamic]^Buffer_History,
 	last:                     ^wlr.Render_Buffer,
+	committed_at:             posix.timespec,
+	committed:                proc(^Output, []wlr.Box),
+	commit:                   wl.Listener,
 	gamma:                    gles.Gamma,
-	gamma_dirty:              bool,
 	swapchain:                gles.Swapchain,
 	cursor:                   Cursor,
 	bounds:                   wlr.Box,
@@ -39,9 +41,9 @@ output_init :: proc(
 ) {
 	o.scene, o.handle, o.renderer, o.layout = scene, handle, renderer, layout
 	o.trace = os.get_env("KILN_PAINT_DEBUG", context.temp_allocator) == "1"
-	o.gamma_dirty = true
 	append(&scene.outputs, o)
 	wl.listen(&handle.events.needs_frame, &o.needs_frame, output_needed)
+	wl.listen(&handle.events.commit, &o.commit, output_committed)
 	output_sync(o)
 }
 
@@ -58,6 +60,7 @@ output_finish :: proc(o: ^Output) {
 	for len(o.subscriptions) > 0 {unsubscribe(o.subscriptions[len(o.subscriptions) - 1])}
 	delete(o.subscriptions)
 	wl.unlisten(&o.needs_frame)
+	wl.unlisten(&o.commit)
 	if o.last != nil {wlr.buffer_release(o.last)}
 	gles.swapchain_finish(&o.swapchain)
 	delete(o.parts)
@@ -71,6 +74,18 @@ output_finish :: proc(o: ^Output) {
 				break
 			}
 		}
+	}
+}
+
+output_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+	context = runtime.default_context()
+	o := wl.owner(listener, Output, "commit")
+	e := cast(^wlr.wlr_output_event_commit)data
+	if e.state.committed & wlr.WLR_OUTPUT_STATE_BUFFER != 0 {
+		previous := o.last
+		o.last = wlr.buffer_retain(e.state.buffer)
+		if previous != nil { wlr.buffer_release(previous) }
+		o.committed_at = e.when_
 	}
 }
 
@@ -225,7 +240,9 @@ output_commit :: proc(o: ^Output) -> bool {
 	defer wlr.wlr_output_state_finish(&state)
 	if len(o.damage) == 0 && o.last != nil {
 		wlr.output_buffer(&state, o.last)
-		return commit_target(o, &state)
+		if !commit_target(o, &state) { return false }
+		if o.committed != nil { o.committed(o, nil) }
+		return true
 	}
 	buffer := acquire_target(o, o.width, o.height)
 	if buffer == nil {return false}
@@ -234,11 +251,6 @@ output_commit :: proc(o: ^Output) -> bool {
 	history := history_acquire(o, buffer)
 	pending := history_repaint(history)
 	repaint := repaint_union(pending[:], {0, 0, o.width, o.height})
-	if o.gamma_dirty {
-		table := wlr.gamma_table(o.scene.gamma, o.handle)
-		if !gles.gamma_update(o.renderer, &o.gamma, table) {return false}
-		o.gamma_dirty = false
-	}
 	pass, begun := gles.begin(target_buffer(buffer), o.gamma)
 	if !begun {return false}
 	for box in repaint {gles.clear(&pass, box)}
@@ -258,8 +270,7 @@ output_commit :: proc(o: ^Output) -> bool {
 		output_invalidate(o)
 		return false
 	}
-	if o.last != nil {wlr.buffer_release(o.last)}
-	o.last = wlr.buffer_retain(buffer)
+	if o.committed != nil { o.committed(o, repaint[:]) }
 	history_presented(history)
 	clear(&o.damage)
 	for e in o.subscriptions {surface_visibility(e, e.visible)}
@@ -270,31 +281,10 @@ output_commit :: proc(o: ^Output) -> bool {
 	return true
 }
 
-set_gamma_manager :: proc(s: ^Scene, manager: ^wlr.wlr_gamma_control_manager_v1) {
-	s.gamma = manager
-	wl.listen(&manager.events.set_gamma, &s.gamma_changed, gamma_changed)
-	wl.listen(&manager.events.destroy, &s.gamma_destroy, gamma_destroyed)
-}
-
-gamma_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
-	s := wl.owner(listener, Scene, "gamma_changed")
-	e := (^wlr.wlr_gamma_control_manager_v1_set_gamma_event)(data)
-	o := get_scene_output(s, e.output)
-	if o != nil {
-		o.gamma_dirty = true
-		output_invalidate(o)
-	}
-}
-
-gamma_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
-	s := wl.owner(listener, Scene, "gamma_destroy")
-	wl.unlisten(&s.gamma_changed)
-	wl.unlisten(&s.gamma_destroy)
-	s.gamma = nil
-	for o in s.outputs {
-		o.gamma_dirty = true
-		output_invalidate(o)
-	}
+set_gamma :: proc(s: ^Scene, output: ^wlr.wlr_output, table: []u16) -> bool {
+	o := get_scene_output(s, output)
+	if o == nil { return false }
+	if !gles.gamma_update(o.renderer, &o.gamma, table) { return false }
+	output_invalidate(o)
+	return true
 }

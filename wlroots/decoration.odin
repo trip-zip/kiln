@@ -5,7 +5,7 @@ import wl "../wayland"
 
 wlr_xdg_decoration_manager_v1 :: struct #align(8) {
     _opaque_0: [24]u8,
-    events: struct { new_toplevel_decoration, destroy: wl.Signal },
+    events: struct { new_toplevel_decoration: wl.Signal, _opaque_16: [16]u8 },
     _opaque_56: [32]u8,
 }
 wlr_xdg_toplevel_decoration_v1 :: struct #align(8) {
@@ -52,7 +52,6 @@ decoration_create :: proc(display: ^wl.Display) -> ^wlr_xdg_decoration_manager_v
 #assert(size_of(type_of(wlr_xdg_decoration_manager_v1{}.events))==32)
 #assert(align_of(type_of(wlr_xdg_decoration_manager_v1{}.events))==8)
 #assert(offset_of(type_of(wlr_xdg_decoration_manager_v1{}.events),new_toplevel_decoration)==0)
-#assert(offset_of(type_of(wlr_xdg_decoration_manager_v1{}.events),destroy)==16)
 #assert(size_of(type_of(wlr_xdg_toplevel_decoration_v1{}.events))==32)
 #assert(align_of(type_of(wlr_xdg_toplevel_decoration_v1{}.events))==8)
 #assert(offset_of(type_of(wlr_xdg_toplevel_decoration_v1{}.events),destroy)==0)

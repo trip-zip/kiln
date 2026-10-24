@@ -128,12 +128,13 @@ import_buffer :: proc(r: ^Renderer, b: ^wlr.wlr_buffer) -> ^Texture {
 update :: proc(r: ^Renderer, b: ^wlr.wlr_buffer, boxes: []Box) {
 	if r == nil || b == nil {return}
 	if t := r.textures[rawptr(b)]; t != nil && t.image == egl.NO_IMAGE {
-		current(r)
+		if !current(r) {return}
 		upload(t, boxes, false)
 	}
 }
 
 upload :: proc(t: ^Texture, boxes: []Box, full: bool) -> bool {
+	if t.renderer.lost {return false}
 	data: rawptr
 	format: u32
 	stride: c.size_t

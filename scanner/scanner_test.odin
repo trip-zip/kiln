@@ -81,8 +81,8 @@ scanner_can_omit_c_exports :: proc(t: ^testing.T) {
 
 @(test)
 checked_in_core_tables_are_reproducible :: proc(t: ^testing.T) {
-	source :: "/usr/share/wayland/wayland.xml"
-	input, read_error := os.read_entire_file(source, context.allocator)
+	source :: "protocols/xml/wayland.xml"
+	input, read_error := os.read_entire_file(#directory + "../" + source, context.allocator)
 	if !testing.expect(t, read_error == nil) { return }
 	defer delete(input)
 	output, error := generate(string(input), source, true)

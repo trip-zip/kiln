@@ -4,6 +4,7 @@ import sp "../scene_paint"
 import wl "../wayland"
 import wlr "../wlroots"
 import "base:runtime"
+import "core:math"
 
 cursor_sync :: proc(s: ^Server) {
 	if s.cursor == nil {return}
@@ -58,4 +59,34 @@ cursor_surface_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	s.cursor_hx -= s.cursor_surface.current.dx
 	s.cursor_hy -= s.cursor_surface.current.dy
 	cursor_sync(s)
+}
+
+// Position queries keep input constraints without creating rendering cursors.
+cursor_position :: proc(s: ^Server, x, y: f64) {
+	if s.cursor == nil || s.layout == nil { return }
+	lx := s.cursor.x if math.is_nan(x) else x
+	ly := s.cursor.y if math.is_nan(y) else y
+	if math.is_inf(lx) || math.is_inf(ly) { return }
+	box: wlr.Box
+	wlr.wlr_output_layout_get_box(s.layout, nil, &box)
+	if box.width <= 0 || box.height <= 0 { return }
+	wlr.wlr_output_layout_closest_point(s.layout, nil, lx, ly, &s.cursor.x, &s.cursor.y)
+}
+
+cursor_absolute_position :: proc(s: ^Server, pointer: ^wlr.wlr_pointer, x, y: f64) -> (f64, f64) {
+	output: ^wlr.wlr_output
+	for o in s.outputs { if o.lifetime == pointer_output(s, pointer) { output = o.handle; break } }
+	box: wlr.Box
+	wlr.wlr_output_layout_get_box(s.layout, output, &box)
+	return s.cursor.x if math.is_nan(x) else f64(box.x)+x*f64(box.width),
+		s.cursor.y if math.is_nan(y) else f64(box.y)+y*f64(box.height)
+}
+
+cursor_hint :: proc(s: ^Server, x, y: f64) {
+	lx, ly := s.cursor.x-s.seat.pointer_state.sx+x, s.cursor.y-s.seat.pointer_state.sy+y
+	if !math.is_nan(lx) && !math.is_nan(ly) && lx >= f64(min(i32)) && lx <= f64(max(i32)) &&
+	   ly >= f64(min(i32)) && ly <= f64(max(i32)) && wlr.wlr_output_layout_contains_point(s.layout, nil, i32(lx), i32(ly)) {
+		s.cursor.x, s.cursor.y = lx, ly
+		wlr.wlr_seat_pointer_warp(s.seat, x, y)
+	}
 }

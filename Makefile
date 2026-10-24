@@ -37,7 +37,10 @@ build/kiln-scanner: $(wildcard scanner/*.odin)
 
 protocols: build/kiln-scanner
 	@mkdir -p protocols
-	./build/kiln-scanner --export-c /usr/share/wayland/wayland.xml protocols/wayland.odin
+	./build/kiln-scanner --export-c protocols/xml/wayland.xml protocols/wayland.odin
+	@set -e; for xml in $(filter-out protocols/xml/wayland.xml,$(wildcard protocols/xml/*.xml)); do \
+		./build/kiln-scanner $$xml protocols/$$(basename $$xml .xml).odin; \
+	done
 
 # Clay is a single-header C library; its archive is built once from the
 # vendored header, next to the binding, the way Odin's vendor packages do.
@@ -61,7 +64,8 @@ check: $(CLAY)
 
 # Clay keeps a process-global context and the D-Bus tests share one bus, so
 # tests run on one thread.
-test: all
+test: all build/kiln-scanner
+	python3 scripts/check-protocols.py
 	dbus-run-session -- $(ODIN) test . -all-packages -define:ODIN_TEST_THREADS=1 -out:build/kiln-test $(LDFLAGS)
 	$(ODIN) test command_client -out:build/kiln-client-test
 	$(ODIN) test scanner -out:build/kiln-scanner-test

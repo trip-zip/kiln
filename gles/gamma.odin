@@ -10,6 +10,7 @@ Gamma :: struct {
 }
 
 gamma_update :: proc(r: ^Renderer, gamma: ^Gamma, table: []u16) -> bool {
+	if r.lost {return false}
 	same := len(gamma.table) == len(table)
 	if same {
 		for v, i in table {
@@ -55,8 +56,7 @@ gamma_update :: proc(r: ^Renderer, gamma: ^Gamma, table: []u16) -> bool {
 gamma_finish :: proc(gamma: ^Gamma) {
 	if gamma.renderer != nil {
 		context.allocator = gamma.renderer.allocator
-		current(gamma.renderer)
-		gl.DeleteTextures(1, &gamma.name)
+		if current(gamma.renderer) {gl.DeleteTextures(1, &gamma.name)}
 		delete(gamma.table)
 	}
 	gamma^ = {}

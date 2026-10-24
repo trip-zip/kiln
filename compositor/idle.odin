@@ -1,5 +1,7 @@
 package compositor
 
+import ext "../extensions"
+
 import "core:time"
 import vm "../lua_runtime"
 import wl "../wayland"
@@ -8,12 +10,12 @@ import "base:runtime"
 
 Idle_Inhibitor :: struct {
 	server:               ^Server,
-	handle:               ^wlr.wlr_idle_inhibitor_v1,
+	handle:               ^ext.Idle_Inhibitor,
 	destroy, map_, unmap: wl.Listener,
 }
 init_idle :: proc(s: ^Server) -> bool {
-	manager: ^wlr.wlr_idle_inhibit_manager_v1
-	s.idle_notifier, manager = wlr.idle_create(s.display)
+	manager: ^ext.Idle_Inhibit_Manager
+	s.idle_notifier, manager = ext.idle_create(s.display)
 	if s.idle_notifier == nil || manager == nil {return false}
 	wl.listen(&manager.events.new_inhibitor, &s.new_idle_inhibitor, idle_inhibitor_added)
 	s.idle_timer = wl.on_timer(s.display, idle_timeout, s)
@@ -36,7 +38,7 @@ idle_timeout :: proc(data: rawptr) -> i32 {
 }
 idle_activity :: proc(s: ^Server) {
 	if s.shutting_down {return}
-	if s.idle_notifier != nil {wlr.idle_activity(s.idle_notifier, s.seat)}
+	if s.idle_notifier != nil {ext.idle_activity(s.idle_notifier, s.seat)}
 	if s.idle {s.idle = false
 		queue_event(s, vm.Event{class = "idle", name = "stop"})}
 	if s.idle_timeout_ms > 0 {wl.arm_timer(s.idle_timer, time.Duration(s.idle_timeout_ms)*time.Millisecond)}
@@ -58,7 +60,7 @@ idle_recompute :: proc(s: ^Server) {
 			break}}
 	if on == s.idle_inhibited {return}
 	s.idle_inhibited = on
-	wlr.idle_inhibit(s.idle_notifier, on)
+	ext.idle_inhibit(s.idle_notifier, on)
 	queue_event(s, vm.Event{class = "idle", name = "inhibit", on = on})
 }
 idle_inhibitor_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
@@ -66,7 +68,7 @@ idle_inhibitor_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	s := wl.owner(listener, Server, "new_idle_inhibitor")
 	i := new(Idle_Inhibitor)
 	i.server = s
-	i.handle = (^wlr.wlr_idle_inhibitor_v1)(data)
+	i.handle = (^ext.Idle_Inhibitor)(data)
 	append(&s.idle_inhibitors, i)
 	wl.listen(&i.handle.events.destroy, &i.destroy, idle_inhibitor_destroyed)
 	wl.listen(&i.handle.surface.events.map_, &i.map_, idle_surface_mapped)

@@ -1,5 +1,7 @@
 package compositor
 
+import ext "../extensions"
+
 import "core:testing"
 import "core:strings"
 import wl "../wayland"
@@ -10,7 +12,7 @@ import vm "../lua_runtime"
 activation_owns_payload_and_retires_mints :: proc(t: ^testing.T) {
     s:=Server{display=wl.create()}
     s.seat=wlr.wlr_seat_create(s.display,"activation")
-    s.activation=wlr.activation_create(s.display)
+    s.activation=ext.activation_create(s.display)
     testing.expect(t,s.activation!=nil && s.seat!=nil)
     defer destroy(&s)
     for _ in 0..<20 {
@@ -27,8 +29,8 @@ activation_owns_payload_and_retires_mints :: proc(t: ^testing.T) {
     append(&s.views,&v)
     defer clear(&s.views)
     app:=strings.clone_to_cstring("hint")
-    token:=wlr.wlr_xdg_activation_token_v1{seat=s.seat,app_id=app}
-    event:=wlr.wlr_xdg_activation_v1_request_activate_event{token=&token,surface=&surface}
+    token:=ext.Activation_Token{seat=s.seat,app_id=app}
+    event:=ext.Activation_Event{token=&token,surface=&surface}
     activation_requested(&s.request_activate,&event)
     delete(app)
     testing.expect_value(t,len(s.events),1)

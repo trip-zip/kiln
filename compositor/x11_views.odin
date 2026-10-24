@@ -1,5 +1,7 @@
 package compositor
 
+import ext "../extensions"
+
 import sp "../scene_paint"
 
 import images "../images"
@@ -334,9 +336,9 @@ x11_settled_state :: proc(s: ^Server, e: ^vm.Event) {
 		   xs.maximized_vert !=
 			   x.granted_maximized {wlr.xwayland_maximize(xs, x.granted_maximized)}
 		if xs.minimized != x.granted_minimized {wlr.xwayland_minimize(xs, x.granted_minimized)}
-		wlr.foreign_fullscreen(v.foreign_handle, x.granted_fullscreen)
-		wlr.foreign_maximized(v.foreign_handle, x.granted_maximized)
-		wlr.foreign_minimized(v.foreign_handle, x.granted_minimized)
+		ext.foreign_fullscreen(v.foreign_handle, x.granted_fullscreen)
+		ext.foreign_maximized(v.foreign_handle, x.granted_maximized)
+		ext.foreign_minimized(v.foreign_handle, x.granted_minimized)
 		return
 	}
 }

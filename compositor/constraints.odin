@@ -1,5 +1,7 @@
 package compositor
 
+import ext "../extensions"
+
 import "base:runtime"
 import wl "../wayland"
 import wlr "../wlroots"
@@ -18,7 +20,7 @@ constraint_hint :: proc(s: ^Server, c: ^wlr.wlr_pointer_constraint_v1) {
 	// Picking the published scene verifies the seat mapping still names a live leaf.
 	surface, _, _, _ := hit_test(s, s.cursor.x, s.cursor.y)
 	if surface != c.surface {return}
-	wlr.constraint_warp(s.cursor, s.seat, c.current.cursor_hint.x, c.current.cursor_hint.y)
+	cursor_hint(s, c.current.cursor_hint.x, c.current.cursor_hint.y)
 	cursor_sync(s)
 }
 
@@ -81,13 +83,13 @@ device_motion :: proc(s: ^Server, e: ^vm.Event) {
 		ux, uy = dx, dy
 	}
 	constraint_sync(s)
-	if !s.pointer_grabbed {wlr.relative_motion(s.relative, s.seat, e.time, dx, dy, ux, uy)}
+	if !s.pointer_grabbed {ext.relative_motion(s.relative, s.seat, e.time, dx, dy, ux, uy)}
 	c := s.active_constraint
 	if c != nil {
 		if c.type == 0 {return}
 		dx, dy = wlr.constraint_confine(c, s.seat, dx, dy)
 	}
-	wlr.wlr_cursor_move(s.cursor, nil, dx, dy)
+	cursor_position(s, s.cursor.x+dx, s.cursor.y+dy)
 	cursor_sync(s)
 	drag_position(s)
 	fact := vm.Event {

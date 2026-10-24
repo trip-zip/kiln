@@ -1,5 +1,7 @@
 package compositor
 
+import ext "../extensions"
+
 import sp "../scene_paint"
 
 import images "../images"
@@ -18,7 +20,7 @@ View :: struct {
 	},
 	allocator:                                                                               runtime.Allocator,
 	mapped:                                                                                  bool,
-	foreign_handle:                                                                          ^wlr.wlr_foreign_toplevel_handle_v1,
+	foreign_handle:                                                                          ^ext.Foreign_Handle,
 	foreign_output:                                                                          ^wlr.wlr_output,
 	foreign_title,
 	foreign_app:                                                              string,
@@ -55,12 +57,12 @@ focus :: proc(view: ^View) {
 	s := view.server
 	if locked(s) {return}
 	if s.focused != nil && s.focused != view {
-		wlr.foreign_activated(s.focused.foreign_handle, false)
+		ext.foreign_activated(s.focused.foreign_handle, false)
 		view_activate(s.focused, false)
 	}
 	changed := s.focused != view
 	s.focused = view
-	wlr.foreign_activated(view.foreign_handle, true)
+	ext.foreign_activated(view.foreign_handle, true)
 	view_activate(view, true)
 	enter_surface(s, view_surface(view))
 	if changed {queue_event(s, vm.Event{class = "input", name = "focus", handle = view.id})}
@@ -201,7 +203,7 @@ clear_focus :: proc(s: ^Server) {
 	   s.seat.keyboard_state.focused_surface !=
 		   nil {queue_event(s, vm.Event{class = "input", name = "focus"})}
 	if s.focused != nil {
-		wlr.foreign_activated(s.focused.foreign_handle, false)
+		ext.foreign_activated(s.focused.foreign_handle, false)
 		view_activate(s.focused, false)
 		s.focused = nil
 		queue_event(s, vm.Event{class = "input", name = "focus"})

@@ -98,6 +98,7 @@ runtime_cursor_theme :: proc(data: rawptr, name: cstring, size: u32) {
 map_pointers :: proc(s: ^Server) {
 	for p in s.pointers {
 		handle := wlr.wlr_pointer_from_input_device(p.device)
+		wlr.wlr_cursor_map_input_to_output(s.cursor, p.device, nil)
 		if handle.output_name == nil {continue}
 		for o in s.outputs {
 			if string(o.handle.name) == string(handle.output_name) {

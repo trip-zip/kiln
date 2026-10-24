@@ -3,6 +3,7 @@ package gles
 import "../gbm"
 import "base:runtime"
 import "core:fmt"
+import "core:os"
 import "core:strings"
 import "core:sys/posix"
 import gl "vendor:OpenGL"
@@ -22,6 +23,7 @@ Renderer :: struct {
 	display:                           egl.Display,
 	ctx:                               egl.Context,
 	image_texture, image_renderbuffer: proc "c" (target: u32, image: egl.Image),
+	reset_status:                      proc "c" () -> u32,
 	query_formats:                     proc "c" (
 		display: egl.Display,
 		max: i32,
@@ -36,7 +38,7 @@ Renderer :: struct {
 		external: [^]u32,
 		count: ^i32,
 	) -> u32,
-	bgra, loaded:                      bool,
+	bgra, loaded, lost:                bool,
 	rect_program, texture_program:     Program,
 	formats:                           []i32,
 	textures:                          map[rawptr]^Texture,
@@ -52,10 +54,29 @@ has :: proc(extensions: string, name: string) -> bool {
 }
 
 current :: proc(r: ^Renderer) -> bool {
-	return egl.MakeCurrent(r.display, egl.NO_SURFACE, egl.NO_SURFACE, r.ctx) != false
+	return !r.lost && egl.MakeCurrent(r.display, egl.NO_SURFACE, egl.NO_SURFACE, r.ctx) != false
+}
+
+drm_directory :: proc(device: posix.dev_t) -> string {
+	major := (u64(device)>>8)&0xfff | (u64(device)>>32)&0xfffff000
+	minor := u64(device)&0xff | (u64(device)>>12)&0xffffff00
+	return fmt.tprintf("/sys/dev/char/%d:%d/device/drm", major, minor)
+}
+
+render_node :: proc(path: string) -> (name: string, ok: bool) {
+	entries, err := os.read_all_directory_by_path(path, context.temp_allocator)
+	if err != nil {return "", false}
+	for entry in entries {
+		if !strings.has_prefix(entry.name, "renderD") || len(entry.name) == 7 {continue}
+		digits := true
+		for ch in entry.name[7:] {if ch < '0' || ch > '9' {digits = false; break}}
+		if digits {return entry.name, true}
+	}
+	return "", true
 }
 
 create :: proc(backend_fd: i32) -> ^Renderer {
+	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
 	r := new(Renderer)
 	r.fd = -1
 	r.allocator = context.allocator
@@ -63,17 +84,33 @@ create :: proc(backend_fd: i32) -> ^Renderer {
 	defer {
 		if !ok {destroy(r)}
 	}
+	opened: string
 	if backend_fd >= 0 {
-		r.fd = i32(posix.fcntl(posix.FD(backend_fd), .DUPFD_CLOEXEC, i32(0)))
+		device: posix.stat_t
+		if posix.fstat(posix.FD(backend_fd), &device) != .OK {return nil}
+		node, resolved := render_node(drm_directory(device.st_rdev))
+		if !resolved {
+			fmt.eprintf("GLES: cannot resolve render node in %s\n", drm_directory(device.st_rdev))
+			return nil
+		}
+		if node != "" {
+			opened = fmt.tprintf("/dev/dri/%s", node)
+			// A dup shares GEM handles with KMS, whose framebuffer imports close them.
+			r.fd = i32(posix.open(strings.clone_to_cstring(opened, context.temp_allocator), {.RDWR, .CLOEXEC}))
+		} else {
+			opened = fmt.tprintf("backend fd %d (dup)", backend_fd)
+			fmt.eprintln("GLES: no render node for backend; handles are shared with KMS")
+			r.fd = i32(posix.fcntl(posix.FD(backend_fd), .DUPFD_CLOEXEC, i32(0)))
+		}
 	} else {
 		for i in 128 ..< 256 {
 			path := fmt.ctprintf("/dev/dri/renderD%d", i)
 			r.fd = i32(posix.open(path, {.RDWR, .CLOEXEC}))
-			if r.fd >= 0 {break}
+			if r.fd >= 0 {opened = string(path); break}
 		}
 	}
 	if r.fd < 0 {
-		fmt.eprintln("GLES: no render node opens")
+		fmt.eprintf("GLES: cannot open render device %s\n", opened)
 		return nil
 	}
 	r.device = gbm.create(r.fd)
@@ -108,12 +145,19 @@ create :: proc(backend_fd: i32) -> ^Renderer {
 	count: i32
 	if egl.ChooseConfig(r.display, &attrs[0], &config, 1, &count) == false ||
 	   count == 0 {return nil}
-	ctx := [?]i32{egl.CONTEXT_CLIENT_VERSION, 2, egl.NONE}
+	ctx := [?]i32{egl.CONTEXT_CLIENT_VERSION, 2, egl.NONE, egl.NONE, egl.NONE}
+	if has(ext, "EGL_EXT_create_context_robustness") {
+		ctx[2], ctx[3] = EGL_CONTEXT_OPENGL_RESET_NOTIFICATION_STRATEGY_EXT, egl.LOSE_CONTEXT_ON_RESET
+	}
 	r.ctx = egl.CreateContext(r.display, config, egl.NO_CONTEXT, &ctx[0])
 	if r.ctx == egl.NO_CONTEXT || !current(r) {return nil}
 	gl.load_up_to(3, 0, egl.gl_set_proc_address)
 	r.loaded = true
 	gl_ext := string(cstring(gl.GetString(gl.EXTENSIONS)))
+	if has(gl_ext, "GL_KHR_robustness") {
+		r.reset_status = cast(type_of(r.reset_status))egl.GetProcAddress("glGetGraphicsResetStatusKHR")
+		if r.reset_status == nil {return nil}
+	}
 	if !has(gl_ext, "GL_OES_EGL_image") {
 		fmt.eprintln("GLES: required extension GL_OES_EGL_image missing")
 		return nil
@@ -149,7 +193,7 @@ create :: proc(backend_fd: i32) -> ^Renderer {
 	if r.rect_program.name == 0 || r.texture_program.name == 0 {return nil}
 	r.textures = make(map[rawptr]^Texture)
 	r.rejected = make(map[u32]bool)
-	fmt.printf("GLES: %s; BGRA readback %v\n", cstring(gl.GetString(gl.RENDERER)), r.bgra)
+	fmt.printf("GLES: %s; device %s; BGRA readback %v\n", cstring(gl.GetString(gl.RENDERER)), opened, r.bgra)
 	ok = true
 	return r
 }
@@ -193,6 +237,7 @@ image :: proc(
 	modifier: u64,
 	planes: []Plane,
 ) -> egl.Image {
+	if r.lost {return egl.NO_IMAGE}
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
 	attrs := make([dynamic]int, context.temp_allocator)
 	append(

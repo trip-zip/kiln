@@ -10,7 +10,7 @@ wlr_xwayland :: struct #align(8) {
     display_name: cstring,
     _opaque_40: [16]u8,
     seat: ^wlr_seat,
-    events: struct { destroy, ready, new_surface, remove_startup_info: wl.Signal },
+    events: struct { destroy, ready, new_surface: wl.Signal, _opaque_48: [16]u8 },
     _opaque_128: [152]u8,
 }
 wlr_xwayland_server :: struct #align(8) {
@@ -19,9 +19,8 @@ wlr_xwayland_server :: struct #align(8) {
     ready: bool,
     _opaque_41: [15]u8,
     display: i32,
-    display_name: [16]u8,
-    _opaque_76: [52]u8,
-    events: struct { start, ready, destroy: wl.Signal },
+    _opaque_60: [68]u8,
+    events: struct { start: wl.Signal, _opaque_16: [32]u8 },
     _opaque_176: [56]u8,
 }
 foreign import xwayland_lib "system:wlroots-0.20"
@@ -43,15 +42,12 @@ xwayland_seat :: proc(xwayland: ^wlr_xwayland, seat: ^wlr_seat) { wlr_xwayland_s
 #assert(offset_of(type_of(wlr_xwayland{}.events),destroy)==0)
 #assert(offset_of(type_of(wlr_xwayland{}.events),ready)==16)
 #assert(offset_of(type_of(wlr_xwayland{}.events),new_surface)==32)
-#assert(offset_of(type_of(wlr_xwayland{}.events),remove_startup_info)==48)
 #assert(size_of(wlr_xwayland_server)==232 && align_of(wlr_xwayland_server)==8)
 #assert(offset_of(wlr_xwayland_server,pid)==0 && offset_of(wlr_xwayland_server,ready)==40)
-#assert(offset_of(wlr_xwayland_server,display)==56 && offset_of(wlr_xwayland_server,display_name)==60)
+#assert(offset_of(wlr_xwayland_server,display)==56)
 #assert(offset_of(wlr_xwayland_server,events)==128)
 #assert(size_of(type_of(wlr_xwayland_server{}.events))==48 && align_of(type_of(wlr_xwayland_server{}.events))==8)
 #assert(offset_of(type_of(wlr_xwayland_server{}.events),start)==0)
-#assert(offset_of(type_of(wlr_xwayland_server{}.events),ready)==16)
-#assert(offset_of(type_of(wlr_xwayland_server{}.events),destroy)==32)
 
 wlr_xwayland_surface_events :: struct #align(8) {
     destroy: wl.Signal,
@@ -111,12 +107,13 @@ wlr_xwayland_surface :: struct #align(8) {
     data: rawptr,
     _opaque_904: [88]u8,
 }
-wlr_xwayland_surface_configure_event :: struct {
-    surface: ^wlr_xwayland_surface,
+wlr_xwayland_surface_configure_event :: struct #align(8) {
+    _opaque_0: [8]u8,
     x,y: i16,
-    width,height,mask: u16,
+    width,height: u16,
+    _opaque_16: [8]u8,
 }
-wlr_xwayland_minimize_event :: struct { surface: ^wlr_xwayland_surface, minimize: bool }
+wlr_xwayland_minimize_event :: struct #align(8) { _opaque_0: [8]u8, minimize: bool }
 foreign xwayland_lib {
     wlr_xwayland_surface_configure :: proc(surface: ^wlr_xwayland_surface, x,y: i16, width,height: u16) ---
     wlr_xwayland_surface_activate :: proc(surface: ^wlr_xwayland_surface, activated: bool) ---
@@ -173,13 +170,11 @@ xwayland_connection :: proc(xwayland: ^wlr_xwayland) -> ^xcb.xcb_connection_t {
 #assert(offset_of(wlr_xwayland_surface_events,set_title)==288 && offset_of(wlr_xwayland_surface_events,set_class)==304)
 #assert(offset_of(wlr_xwayland_surface_events,set_geometry)==464)
 #assert(size_of(wlr_xwayland_surface_configure_event)==24 && align_of(wlr_xwayland_surface_configure_event)==8)
-#assert(offset_of(wlr_xwayland_surface_configure_event,surface)==0)
 #assert(offset_of(wlr_xwayland_surface_configure_event,x)==8 && offset_of(wlr_xwayland_surface_configure_event,y)==10)
 #assert(offset_of(wlr_xwayland_surface_configure_event,width)==12)
 #assert(offset_of(wlr_xwayland_surface_configure_event,height)==14)
-#assert(offset_of(wlr_xwayland_surface_configure_event,mask)==16)
 #assert(size_of(wlr_xwayland_minimize_event)==16 && align_of(wlr_xwayland_minimize_event)==8)
-#assert(offset_of(wlr_xwayland_minimize_event,surface)==0 && offset_of(wlr_xwayland_minimize_event,minimize)==8)
+#assert(offset_of(wlr_xwayland_minimize_event,minimize)==8)
 
 #assert(offset_of(wlr_xwayland_surface,role)==160)
 

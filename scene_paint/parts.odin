@@ -13,8 +13,6 @@ Scene :: struct {
 	new_surface:                  wl.Listener,
 	allocator:                    runtime.Allocator,
 	outputs:                      [dynamic]^Output,
-	gamma:                        ^wlr.wlr_gamma_control_manager_v1,
-	gamma_changed, gamma_destroy: wl.Listener,
 }
 
 scene_create :: proc() -> ^Scene {
@@ -34,8 +32,6 @@ scene_destroy :: proc(s: ^Scene) {
 		}
 	}
 	delete(s.sources)
-	wl.unlisten(&s.gamma_changed)
-	wl.unlisten(&s.gamma_destroy)
 	delete(s.outputs)
 	free(s)
 }

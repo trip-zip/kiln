@@ -5,7 +5,7 @@ import wl "../wayland"
 
 wlr_layer_shell_v1 :: struct #align(8) {
     _opaque_0: [8]u8,
-    events: struct { new_surface, destroy: wl.Signal },
+    events: struct { new_surface: wl.Signal, _opaque_16: [16]u8 },
     _opaque_40: [32]u8,
 }
 wlr_layer_surface_v1_state :: struct {
@@ -15,7 +15,7 @@ wlr_layer_surface_v1_state :: struct {
     keyboard_interactive: c.int,
     desired_width, desired_height: u32,
     layer: c.int,
-    exclusive_edge, configure_serial, actual_width, actual_height: u32,
+    _opaque_44: [16]u8,
 }
 wlr_layer_surface_v1 :: struct #align(8) {
     surface: ^wlr_surface,
@@ -24,7 +24,8 @@ wlr_layer_surface_v1 :: struct #align(8) {
 	popups: wl.List,
     namespace: cstring,
     _opaque_56: [24]u8,
-    current, pending: wlr_layer_surface_v1_state,
+    current: wlr_layer_surface_v1_state,
+    _opaque_140: [60]u8,
     initialized, initial_commit: bool,
     _opaque_202: [6]u8,
     events: struct { destroy, new_popup: wl.Signal },
@@ -55,14 +56,10 @@ layer_configure :: proc(surface: ^wlr_layer_surface_v1, width, height: u32) {
 #assert(offset_of(wlr_layer_surface_v1_state, desired_width) == 32)
 #assert(offset_of(wlr_layer_surface_v1_state, desired_height) == 36)
 #assert(offset_of(wlr_layer_surface_v1_state, layer) == 40)
-#assert(offset_of(wlr_layer_surface_v1_state, exclusive_edge) == 44)
-#assert(offset_of(wlr_layer_surface_v1_state, configure_serial) == 48)
-#assert(offset_of(wlr_layer_surface_v1_state, actual_width) == 52)
-#assert(offset_of(wlr_layer_surface_v1_state, actual_height) == 56)
 #assert(size_of(wlr_layer_surface_v1) == 288 && align_of(wlr_layer_surface_v1) == 8)
 #assert(offset_of(wlr_layer_surface_v1, surface) == 0 && offset_of(wlr_layer_surface_v1, output) == 8)
 #assert(offset_of(wlr_layer_surface_v1, namespace) == 48 && offset_of(wlr_layer_surface_v1, current) == 80)
-#assert(offset_of(wlr_layer_surface_v1, pending) == 140 && offset_of(wlr_layer_surface_v1, initialized) == 200)
+#assert(offset_of(wlr_layer_surface_v1, initialized) == 200)
 #assert(offset_of(wlr_layer_surface_v1, initial_commit) == 201 && offset_of(wlr_layer_surface_v1, events) == 208)
 #assert(offset_of(wlr_layer_surface_v1, data) == 240)
 
@@ -70,7 +67,6 @@ layer_close :: proc(surface: ^wlr_layer_surface_v1) { wlr_layer_surface_v1_destr
 #assert(size_of(type_of(wlr_layer_shell_v1{}.events))==32)
 #assert(align_of(type_of(wlr_layer_shell_v1{}.events))==8)
 #assert(offset_of(type_of(wlr_layer_shell_v1{}.events),new_surface)==0)
-#assert(offset_of(type_of(wlr_layer_shell_v1{}.events),destroy)==16)
 #assert(size_of(type_of(wlr_layer_surface_v1{}.events))==32)
 #assert(align_of(type_of(wlr_layer_surface_v1{}.events))==8)
 #assert(offset_of(type_of(wlr_layer_surface_v1{}.events),destroy)==0)

@@ -5,8 +5,67 @@ import wlr "../wlroots"
 import "base:runtime"
 import "core:c"
 import "core:fmt"
+import "core:os"
+import "core:strings"
 import "core:sys/posix"
 import "core:testing"
+import gl "vendor:OpenGL"
+import egl "vendor:egl"
+
+@(test)
+render_node_lookup_matches_drm_device :: proc(t: ^testing.T) {
+	entries, err := os.read_all_directory_by_path("/dev/dri", context.temp_allocator)
+	cards, renders: int
+	for entry in entries {
+		if strings.has_prefix(entry.name, "card") {cards += 1}
+		if strings.has_prefix(entry.name, "renderD") {renders += 1}
+	}
+	if err != nil || cards == 0 || renders == 0 {
+		fmt.println("SKIP render node lookup: /dev/dri has no card/render pair")
+		return
+	}
+	for entry in entries {
+		if !strings.has_prefix(entry.name, "card") && !strings.has_prefix(entry.name, "renderD") {continue}
+		device: posix.stat_t
+		if !testing.expect(t, posix.stat(fmt.ctprintf("/dev/dri/%s", entry.name), &device) == .OK) {continue}
+		directory := drm_directory(device.st_rdev)
+		node, ok := render_node(directory)
+		if !testing.expect(t, ok) {continue}
+		if node == "" && strings.has_prefix(entry.name, "card") {
+			fmt.printf("Render node lookup: %s has no render node\n", entry.name)
+			continue
+		}
+		if !testing.expect(t, node != "") {continue}
+		if strings.has_prefix(entry.name, "renderD") {testing.expect_value(t, node, entry.name)}
+		render, source_device, render_device: posix.stat_t
+		testing.expect(t, posix.stat(fmt.ctprintf("/dev/dri/%s", node), &render) == .OK)
+		testing.expect(t, posix.stat(fmt.ctprintf("%s/..", directory), &source_device) == .OK)
+		testing.expect(t, posix.stat(fmt.ctprintf("%s/..", drm_directory(render.st_rdev)), &render_device) == .OK)
+		testing.expect_value(t, source_device.st_dev, render_device.st_dev)
+		testing.expect_value(t, source_device.st_ino, render_device.st_ino)
+		fmt.printf("Render node lookup: /dev/dri/%s -> %s -> /dev/dri/%s (same device)\n", entry.name, directory, node)
+	}
+}
+
+@(test)
+lost_renderer_rejects_gpu_work :: proc(t: ^testing.T) {
+	r := Renderer{lost = true}
+	b := Buffer{renderer = &r, width = 1, height = 1}
+	_, ok := begin(&b)
+	testing.expect(t, !ok)
+	p := Pass{buffer = &b}
+	testing.expect(t, !submit(&p))
+	pixels: [4]u8
+	testing.expect(t, !read_region(&r, &b, &pixels[0], 4, {0, 0, 1, 1}))
+	tex := Texture{renderer = &r}
+	testing.expect(t, !upload(&tex, nil, true))
+	native: wlr.wlr_buffer
+	testing.expect(t, import_buffer(&r, &native) == nil)
+	gamma: Gamma
+	testing.expect(t, !gamma_update(&r, &gamma, nil))
+	fmt.println("Lost renderer: begin, submit, readback, upload, import and gamma reject work before calling GL")
+}
+
 Test_Pixels :: struct {
 	base:   wlr.wlr_buffer,
 	pixels: [16]u8,
@@ -56,6 +115,14 @@ rect_texture_damage_and_readback :: proc(t: ^testing.T) {
 	r := create(fd)
 	if !testing.expect(t, r != nil, "GBM EGL renderer") {return}
 	defer destroy(r)
+	if has(string(egl.QueryString(r.display, egl.EXTENSIONS)), "EGL_EXT_create_context_robustness") &&
+	   has(string(cstring(gl.GetString(gl.EXTENSIONS))), "GL_KHR_robustness") {
+		strategy: i32
+		gl.GetIntegerv(gl.RESET_NOTIFICATION_STRATEGY, &strategy)
+		testing.expect_value(t, strategy, i32(gl.LOSE_CONTEXT_ON_RESET))
+		testing.expect(t, r.reset_status != nil)
+		fmt.printf("GLES robustness: GL reset notification strategy 0x%x (LOSE_CONTEXT_ON_RESET)\n", strategy)
+	}
 	mods := [1]u64{0}
 	b := buffer_create(r, 16, 12, gbm.XRGB8888, mods[:])
 	if !testing.expect(t, b != nil, "GBM framebuffer") {return}

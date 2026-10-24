@@ -15,8 +15,8 @@ foot_maps_and_disconnects_over_the_wire :: proc(t: ^testing.T) {
 
 	env := make([dynamic]string, 0, len(s.env) + 1, context.temp_allocator)
 	// The nested parent's display belongs to the server, not its clients.
-	for entry in s.env {if !strings.has_prefix(entry, "WAYLAND_DISPLAY=") {append(&env, entry)}}
-	append(&env, fmt.tprintf("WAYLAND_DISPLAY=kiln-%d", s.process.pid))
+	for entry in s.env {if !strings.has_prefix(entry, "WAYLAND_DISPLAY=") && !strings.has_prefix(entry, "WAYLAND_DEBUG=") {append(&env, entry)}}
+	append(&env, fmt.tprintf("WAYLAND_DISPLAY=kiln-%d", s.process.pid), "WAYLAND_DEBUG=client")
 	log, err := os.open(
 		fmt.tprintf("%s/foot.log", s.work),
 		{.Write, .Create},
@@ -55,4 +55,21 @@ foot_maps_and_disconnects_over_the_wire :: proc(t: ^testing.T) {
 		!strings.contains(read_log(&s), "protocol error") && !strings.contains(read_log(&s), "error in client communication"),
 		"protocol error in compositor log",
 	)
+	trace, trace_err := os.read_entire_file(fmt.tprintf("%s/foot.log", s.work), context.temp_allocator)
+	testing.expect(t, trace_err == nil)
+	for protocol in ([]string{"zxdg_output_manager_v1", "wp_cursor_shape_manager_v1", "xdg_activation_v1"}) {
+		bound := false
+		for line in strings.split_lines(string(trace), context.temp_allocator) {
+			if strings.contains(line, ".bind(") && strings.contains(line, fmt.tprintf("\"%s\"", protocol)) {
+				bound = true
+				fmt.printf("Foot %v bind: %s\n", backend(), line)
+			}
+		}
+		testing.expectf(t, bound, "foot bound %s", protocol)
+	}
+	testing.expect(t, strings.contains(string(trace), ".logical_size("), "foot received xdg-output details")
+	if directory := os.get_env("KILN_TEST_ARTIFACTS", context.temp_allocator); directory != "" {
+		testing.expect(t, os.write_entire_file(fmt.tprintf("%s/%v-foot.log", directory, backend()), trace) == nil)
+	}
+
 }
