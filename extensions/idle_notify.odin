@@ -1,8 +1,9 @@
 package extensions
 
+import st "../seat"
+
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:time"
 
@@ -15,7 +16,7 @@ Idle_Notifier :: struct {
 Idle_Notification :: struct {
 	manager: ^Idle_Notifier,
 	resource: ^wl.Resource,
-	seat: ^wlr.wlr_seat,
+	seat: ^st.Seat,
 	timer: ^wl.Event_Source,
 	timeout: time.Duration,
 	idle, obey_inhibitors: bool,
@@ -61,7 +62,7 @@ idle_notification_timeout :: proc(data: rawptr) -> i32 {
 	if n.seat != nil && !(n.manager.inhibited && n.obey_inhibitors) { idle_notification_state(n, true) }
 	return 0
 }
-idle_activity :: proc(m: ^Idle_Notifier, seat: ^wlr.wlr_seat) {
+idle_activity :: proc(m: ^Idle_Notifier, seat: ^st.Seat) {
 	if m == nil { return }
 	for n in m.notifications {
 		if n.seat != nil && n.seat == seat {
@@ -80,8 +81,7 @@ idle_notification_release :: proc(n: ^Idle_Notification) {
 	wl.remove_source(n.timer)
 	n.timer, n.seat = nil, nil
 }
-idle_notification_seat_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+idle_notification_seat_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	n := wl.owner(listener, Idle_Notification, "destroy")
 	context = n.resource.client.display.loop.ctx
 	idle_notification_release(n)

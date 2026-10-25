@@ -1,5 +1,7 @@
 package extensions
 
+import st "../seat"
+
 import p "../protocols"
 import wl "../wayland"
 import wlr "../wlroots"
@@ -33,7 +35,7 @@ Foreign_Output :: struct { handle: ^Foreign_Handle, output: ^wlr.wlr_output, des
 Foreign_Enter :: struct { owner: ^Foreign_Resource, resource: ^wl.Resource, destroy: wl.Listener }
 Foreign_Maximized_Event :: struct { toplevel: ^Foreign_Handle, maximized: bool }
 Foreign_Minimized_Event :: struct { toplevel: ^Foreign_Handle, minimized: bool }
-Foreign_Activated_Event :: struct { toplevel: ^Foreign_Handle, seat: ^wlr.wlr_seat }
+Foreign_Activated_Event :: struct { toplevel: ^Foreign_Handle, seat: ^st.Seat }
 Foreign_Fullscreen_Event :: struct { toplevel: ^Foreign_Handle, fullscreen: bool, output: ^wlr.wlr_output }
 Foreign_Rectangle_Event :: struct { toplevel: ^Foreign_Handle, surface: ^wlr.wlr_surface, x, y, width, height: i32 }
 

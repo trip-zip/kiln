@@ -131,3 +131,18 @@ text :: proc(compose: ^Compose, sym: Symbol, pressed: bool, buffer: []u8, state:
 	n := raw.xkb_keysym_to_utf8(sym, cast(cstring)raw_data(buffer), c.size_t(len(buffer)))
 	return string(buffer[:clamp(int(n)-1, 0, len(buffer)-1)])
 }
+
+Modifiers :: struct { depressed, latched, locked, group: u32 }
+state_create :: raw.xkb_state_new
+state_destroy :: raw.xkb_state_unref
+state_update_key :: proc(state: ^State, code: u32, pressed: bool) { raw.xkb_state_update_key(state, code+8, c.int(pressed)) }
+state_modifiers :: proc(state: ^State) -> Modifiers {
+	return {raw.xkb_state_serialize_mods(state, 1), raw.xkb_state_serialize_mods(state, 2), raw.xkb_state_serialize_mods(state, 4), raw.xkb_state_serialize_layout(state, 128)}
+}
+// Depressed and latched only: a locked Caps or Num must not change a chord or an input fact.
+modifier_mask :: proc(state: ^State) -> (mask: u32) {
+	for name, i in ([8]cstring{"Shift", "Lock", "Control", "Mod1", "Mod2", "Mod3", "Mod4", "Mod5"}) {
+		if raw.xkb_state_mod_name_is_active(state, name, 3) > 0 { mask |= u32(1)<<uint(i) }
+	}
+	return
+}

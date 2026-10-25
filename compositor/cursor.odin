@@ -1,5 +1,7 @@
 package compositor
 
+import st "../seat"
+
 import sp "../scene_paint"
 import wl "../wayland"
 import wlr "../wlroots"
@@ -7,29 +9,28 @@ import "base:runtime"
 import "core:math"
 
 cursor_sync :: proc(s: ^Server) {
-	if s.cursor == nil {return}
 	for o in s.outputs {
 		if len(s.pointers) == 0 {
-			sp.cursor_set(&o.paint, nil, nil, s.cursor.x, s.cursor.y, 0, 0)
+			sp.cursor_set(&o.paint, nil, nil, s.cursor_x, s.cursor_y, 0, 0)
 			continue
 		}
-		image: ^wlr.wlr_xcursor_image
+		image: ^st.Cursor_Image
 		if s.cursor_named && s.cursor_manager != nil {
-			wlr.wlr_xcursor_manager_load(s.cursor_manager, o.handle.scale)
-			c := wlr.wlr_xcursor_manager_get_xcursor(
+			st.xcursor_manager_load(s.cursor_manager, o.handle.scale)
+			c := st.xcursor_manager_get_xcursor(
 				s.cursor_manager,
 				s.cursor_name,
 				o.handle.scale,
 			)
-			if c == nil {c = wlr.wlr_xcursor_manager_get_xcursor(s.cursor_manager, "default", o.handle.scale)}
-			if c != nil && c.image_count > 0 {image = c.images[0]}
+			if c == nil {c = st.xcursor_manager_get_xcursor(s.cursor_manager, "default", o.handle.scale)}
+			if c != nil && len(c.images) > 0 {image = c.images[0]}
 		}
 		sp.cursor_set(
 			&o.paint,
 			s.cursor_surface,
 			image,
-			s.cursor.x,
-			s.cursor.y,
+			s.cursor_x,
+			s.cursor_y,
 			s.cursor_hx,
 			s.cursor_hy,
 		)
@@ -63,14 +64,14 @@ cursor_surface_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 
 // Position queries keep input constraints without creating rendering cursors.
 cursor_position :: proc(s: ^Server, x, y: f64) {
-	if s.cursor == nil || s.layout == nil { return }
-	lx := s.cursor.x if math.is_nan(x) else x
-	ly := s.cursor.y if math.is_nan(y) else y
+	if s.layout == nil { return }
+	lx := s.cursor_x if math.is_nan(x) else x
+	ly := s.cursor_y if math.is_nan(y) else y
 	if math.is_inf(lx) || math.is_inf(ly) { return }
 	box: wlr.Box
 	wlr.wlr_output_layout_get_box(s.layout, nil, &box)
 	if box.width <= 0 || box.height <= 0 { return }
-	wlr.wlr_output_layout_closest_point(s.layout, nil, lx, ly, &s.cursor.x, &s.cursor.y)
+	wlr.wlr_output_layout_closest_point(s.layout, nil, lx, ly, &s.cursor_x, &s.cursor_y)
 }
 
 cursor_absolute_position :: proc(s: ^Server, pointer: ^wlr.wlr_pointer, x, y: f64) -> (f64, f64) {
@@ -78,15 +79,24 @@ cursor_absolute_position :: proc(s: ^Server, pointer: ^wlr.wlr_pointer, x, y: f6
 	for o in s.outputs { if o.lifetime == pointer_output(s, pointer) { output = o.handle; break } }
 	box: wlr.Box
 	wlr.wlr_output_layout_get_box(s.layout, output, &box)
-	return s.cursor.x if math.is_nan(x) else f64(box.x)+x*f64(box.width),
-		s.cursor.y if math.is_nan(y) else f64(box.y)+y*f64(box.height)
+	return s.cursor_x if math.is_nan(x) else f64(box.x)+x*f64(box.width),
+		s.cursor_y if math.is_nan(y) else f64(box.y)+y*f64(box.height)
 }
 
 cursor_hint :: proc(s: ^Server, x, y: f64) {
-	lx, ly := s.cursor.x-s.seat.pointer_state.sx+x, s.cursor.y-s.seat.pointer_state.sy+y
+	lx, ly := s.cursor_x-s.seat.pointer_state.sx+x, s.cursor_y-s.seat.pointer_state.sy+y
 	if !math.is_nan(lx) && !math.is_nan(ly) && lx >= f64(min(i32)) && lx <= f64(max(i32)) &&
 	   ly >= f64(min(i32)) && ly <= f64(max(i32)) && wlr.wlr_output_layout_contains_point(s.layout, nil, i32(lx), i32(ly)) {
-		s.cursor.x, s.cursor.y = lx, ly
-		wlr.wlr_seat_pointer_warp(s.seat, x, y)
+		s.cursor_x, s.cursor_y = lx, ly
+		st.pointer_warp(s.seat, x, y)
 	}
+}
+
+// The queued output lifetime prevents a removed device mapping from targeting its replacement.
+cursor_mapped_position :: proc(s: ^Server, output: u64, x,y: f64) -> (f64,f64) {
+	if output != 0 { for o in s.outputs { if o.lifetime == output {
+		box: wlr.Box; wlr.wlr_output_layout_get_box(s.layout, o.handle, &box)
+		if box.width>0 && box.height>0 { return clamp(x,f64(box.x),f64(box.x+box.width)-1.0/256),clamp(y,f64(box.y),f64(box.y+box.height)-1.0/256) }
+	} } }
+	return x,y
 }

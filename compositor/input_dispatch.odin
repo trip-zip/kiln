@@ -1,7 +1,8 @@
 package compositor
 
+import st "../seat"
+
 import vm "../lua_runtime"
-import wlr "../wlroots"
 import "../keymap"
 
 runtime_grab_keyboard :: proc(data: rawptr, on: bool) {
@@ -14,9 +15,9 @@ runtime_grab_keyboard :: proc(data: rawptr, on: bool) {
 		// Leave cancels client-held keys. Quarantine them until physical release.
 		for kb in s.keyboards {
 			for code in kb.consumed { kb.consumed[code]=true }
-			for code in kb.handle.keycodes[:kb.handle.num_keycodes] { kb.consumed[code]=true }
+			for code in kb.keycodes[:] { kb.consumed[code]=true }
 		}
-		wlr.wlr_seat_keyboard_notify_clear_focus(s.seat)
+		st.keyboard_notify_clear_focus(s.seat)
 	} else if !s.shutting_down { runtime_focus(s,s.requested_focus) }
 }
 runtime_grab_pointer :: proc(data: rawptr, on: bool) {
@@ -27,12 +28,12 @@ runtime_grab_pointer :: proc(data: rawptr, on: bool) {
 	if on {
 		// Finish delivered presses before dropping focus and the implicit grab.
 		for code, consumed in s.buttons {
-			if !consumed { wlr.wlr_seat_pointer_notify_button(s.seat,0,code,0) }
+			if !consumed { st.pointer_notify_button(s.seat,0,code,0) }
 			s.buttons[code]=true
 		}
-		wlr.wlr_seat_pointer_notify_frame(s.seat)
+		st.pointer_notify_frame(s.seat)
 		s.pointer_grabbed=true
-		wlr.wlr_seat_pointer_clear_focus(s.seat)
+		st.pointer_clear_focus(s.seat)
 		if s.pointer_client!=0 {
 			s.pointer_client=0
 			queue_event(s,vm.Event{class="input",name="pointer_enter"})
@@ -93,13 +94,13 @@ dispatch_input :: proc(s: ^Server, event: ^vm.Event) {
 			delete_key(&kb.consumed,e.code)
 			if !held || consumed || key_blocked { return }
 		}
-		wlr.wlr_seat_set_keyboard(s.seat,kb.handle)
-		wlr.wlr_seat_keyboard_notify_key(s.seat,e.time,e.code,u32(e.pressed))
+		st.set_keyboard(s.seat,&kb.keyboard)
+		st.keyboard_notify_key(s.seat,e.time,e.code,u32(e.pressed))
 	case .Modifiers:
 		if kb==nil || key_blocked { return }
-		m:=wlr.wlr_keyboard_modifiers{e.mask[0],e.mask[1],e.mask[2],e.mask[3]}
-		wlr.wlr_seat_set_keyboard(s.seat,kb.handle)
-		wlr.wlr_seat_keyboard_notify_modifiers(s.seat,&m)
+		m:=st.Modifiers{e.mask[0],e.mask[1],e.mask[2],e.mask[3]}
+		st.set_keyboard(s.seat,&kb.keyboard)
+		st.keyboard_notify_modifiers(s.seat,&m)
 	case .Motion:
 		if !pointer_blocked { pointer_refresh_at(s,e.time,e.px,e.py,false) }
 	case .Button:
@@ -114,14 +115,14 @@ dispatch_input :: proc(s: ^Server, event: ^vm.Event) {
 			if !held || consumed || pointer_blocked { return }
 		}
 		pointer_refresh_at(s,e.time,e.px,e.py,false)
-		wlr.wlr_seat_pointer_notify_button(s.seat,e.time,e.code,i32(e.pressed))
+		st.pointer_notify_button(s.seat,e.time,e.code,i32(e.pressed))
         // A protocol grab can defer an already selected target until dismissal.
         if !s.keyboard_grabbed && runtime_focused(s)!=s.requested_focus { runtime_focus(s,s.requested_focus) }
 	case .Axis:
 		if pointer_blocked { return }
 		pointer_refresh_at(s,e.time,e.px,e.py,false)
-		wlr.wlr_seat_pointer_notify_axis(s.seat,e.time,e.orientation,e.delta,e.discrete,e.source,e.direction)
+		st.pointer_notify_axis(s.seat,e.time,e.orientation,e.delta,e.discrete,e.source,e.direction)
 	case .Frame:
-		if !pointer_blocked { wlr.wlr_seat_pointer_notify_frame(s.seat) }
+		if !pointer_blocked { st.pointer_notify_frame(s.seat) }
 	}
 }

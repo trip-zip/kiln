@@ -92,3 +92,19 @@ compose_lifetimes_and_keymap_replacement :: proc(t: ^testing.T) {
 	testing.expect(t,locked!=2 && locked&2!=0)
 	testing.expect_value(t,numlock_mask(state,locked,false),u32(2))
 }
+
+@(test)
+locked_modifiers_stay_out_of_the_chord_mask :: proc(t: ^testing.T) {
+	km, ok := create_default()
+	testing.expect(t, ok)
+	if !ok { return }
+	defer destroy(km)
+	state := state_create(km)
+	defer state_destroy(state)
+	state_update_key(state, 58, true)
+	state_update_key(state, 58, false)
+	testing.expect(t, state_modifiers(state).locked&2 != 0)
+	testing.expect_value(t, modifier_mask(state), 0)
+	state_update_key(state, 42, true)
+	testing.expect_value(t, modifier_mask(state), 1)
+}

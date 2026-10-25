@@ -337,8 +337,7 @@ grab_dismiss :: proc(s: ^Shell) {
 	s.dismissing = false
 	wl.signal_emit_mutable(&s.events.grab_changed, s)
 }
-grab_seat_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+grab_seat_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	s := wl.owner(listener, Shell, "grab_destroy")
 	context = s.global.display.loop.ctx
 	grab_dismiss(s)

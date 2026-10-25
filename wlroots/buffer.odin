@@ -24,15 +24,12 @@ wlr_dmabuf_attributes :: struct {
 	offset, stride: [4]u32,
 	fd:             [4]c.int,
 }
-#assert(offset_of(wlr_dmabuf_attributes, width) == 0 && offset_of(wlr_dmabuf_attributes, height) == 4 && offset_of(wlr_dmabuf_attributes, format) == 8)
-#assert(size_of(wlr_dmabuf_attributes) == 80 && align_of(wlr_dmabuf_attributes) == 8)
+#assert(offset_of(wlr_dmabuf_attributes, width) == 0 && offset_of(wlr_dmabuf_attributes, height) == 4 && offset_of(wlr_dmabuf_attributes, format) == 8 && size_of(wlr_dmabuf_attributes) == 80 && align_of(wlr_dmabuf_attributes) == 8)
 #assert(offset_of(wlr_dmabuf_attributes, modifier) == 16 && offset_of(wlr_dmabuf_attributes, n_planes) == 24)
 #assert(offset_of(wlr_dmabuf_attributes, offset) == 28 && offset_of(wlr_dmabuf_attributes, stride) == 44 && offset_of(wlr_dmabuf_attributes, fd) == 60)
 wlr_shm_attributes :: struct { fd: i32, format: u32, width, height, stride: i32, offset: i64 }
-#assert(size_of(wlr_shm_attributes) == 32 && align_of(wlr_shm_attributes) == 8)
-#assert(offset_of(wlr_shm_attributes, fd) == 0 && offset_of(wlr_shm_attributes, format) == 4)
-#assert(offset_of(wlr_shm_attributes, width) == 8 && offset_of(wlr_shm_attributes, height) == 12)
-#assert(offset_of(wlr_shm_attributes, stride) == 16 && offset_of(wlr_shm_attributes, offset) == 24)
+#assert(size_of(wlr_shm_attributes) == 32 && align_of(wlr_shm_attributes) == 8 && offset_of(wlr_shm_attributes, fd) == 0 && offset_of(wlr_shm_attributes, format) == 4)
+#assert(offset_of(wlr_shm_attributes, width) == 8 && offset_of(wlr_shm_attributes, height) == 12 && offset_of(wlr_shm_attributes, stride) == 16 && offset_of(wlr_shm_attributes, offset) == 24)
 wlr_buffer_impl :: struct {
 	destroy: proc "c" (buffer: ^wlr_buffer),
 	get_dmabuf: proc "c" (buffer: ^wlr_buffer, attribs: ^wlr_dmabuf_attributes) -> bool,
@@ -40,19 +37,11 @@ wlr_buffer_impl :: struct {
 	begin_data_ptr_access: proc "c" (buffer: ^wlr_buffer, flags: u32, data: ^rawptr, format: ^u32, stride: ^c.size_t) -> bool,
 	end_data_ptr_access: proc "c" (buffer: ^wlr_buffer),
 }
-#assert(size_of(wlr_buffer) == 88 && align_of(wlr_buffer) == 8)
-#assert(offset_of(wlr_buffer, width) == 8 && offset_of(wlr_buffer, height) == 12)
-#assert(offset_of(wlr_buffer, dropped) == 16)
-#assert(offset_of(wlr_buffer, events) == 40)
-#assert(size_of(wlr_buffer_impl) == 40 && align_of(wlr_buffer_impl) == 8)
-#assert(offset_of(wlr_buffer_impl, destroy) == 0 && offset_of(wlr_buffer_impl, get_dmabuf) == 8)
-#assert(offset_of(wlr_buffer_impl, begin_data_ptr_access) == 24)
+#assert(size_of(wlr_buffer) == 88 && align_of(wlr_buffer) == 8 && offset_of(wlr_buffer, width) == 8 && offset_of(wlr_buffer, height) == 12 && offset_of(wlr_buffer, dropped) == 16 && offset_of(wlr_buffer, events) == 40)
+#assert(size_of(wlr_buffer_impl) == 40 && align_of(wlr_buffer_impl) == 8 && offset_of(wlr_buffer_impl, destroy) == 0 && offset_of(wlr_buffer_impl, get_dmabuf) == 8 && offset_of(wlr_buffer_impl, begin_data_ptr_access) == 24)
 #assert(offset_of(wlr_buffer_impl, end_data_ptr_access) == 32)
 wlr_fbox :: struct { x,y,width,height: f64 }
-#assert(size_of(wlr_fbox)==32)
-#assert(align_of(wlr_fbox)==8)
-#assert(offset_of(wlr_fbox,x)==0 && offset_of(wlr_fbox,y)==8 && offset_of(wlr_fbox,width)==16)
-#assert(offset_of(wlr_fbox,height)==24)
+#assert(size_of(wlr_fbox)==32 && align_of(wlr_fbox)==8 && offset_of(wlr_fbox,x)==0 && offset_of(wlr_fbox,y)==8 && offset_of(wlr_fbox,width)==16 && offset_of(wlr_fbox,height)==24)
 foreign lib {
 	wlr_buffer_get_shm :: proc(buffer: ^wlr_buffer, attrs: ^wlr_shm_attributes) -> bool ---
 	wlr_buffer_get_dmabuf :: proc(buffer: ^wlr_buffer, attrs: ^wlr_dmabuf_attributes) -> bool ---

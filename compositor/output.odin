@@ -1,5 +1,6 @@
 package compositor
 
+
 import ext "../extensions"
 import layout "../layout"
 import vm "../lua_runtime"
@@ -353,7 +354,7 @@ output_layout_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	s := wl.owner(listener, Server, "layout_change")
 	for output in s.outputs {update_output_facts(output)}
 	ext.xdg_output_update(s.xdg_output)
-	if s.cursor != nil { cursor_position(s, s.cursor.x, s.cursor.y) }
+	if s.seat != nil { cursor_position(s, s.cursor_x, s.cursor_y) }
 }
 
 output_commit_failed :: proc(output: ^Output) {

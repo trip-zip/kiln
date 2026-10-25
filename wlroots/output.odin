@@ -14,8 +14,7 @@ foreign output_lib {
 	wlr_output_effective_resolution :: proc(output: ^wlr_output, width, height: ^i32) ---
 	wlr_output_transformed_resolution :: proc(output: ^wlr_output, width, height: ^i32) ---
 }
-#assert(size_of(wlr_output_event_present) == 48 && align_of(wlr_output_event_present) == 8)
-#assert(
+#assert(size_of(wlr_output_event_present) == 48 && align_of(wlr_output_event_present) == 8 &&
 	offset_of(wlr_output_event_present, commit_seq) == 8 &&
 	offset_of(wlr_output_event_present, presented) == 12,
 )

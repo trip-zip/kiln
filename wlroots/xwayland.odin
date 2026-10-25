@@ -8,8 +8,7 @@ wlr_xwayland :: struct #align(8) {
     server: ^wlr_xwayland_server,
     _opaque_8: [24]u8,
     display_name: cstring,
-    _opaque_40: [16]u8,
-    seat: ^wlr_seat,
+    _opaque_40: [24]u8,
     events: struct { destroy, ready, new_surface: wl.Signal, _opaque_48: [16]u8 },
     _opaque_128: [152]u8,
 }
@@ -27,26 +26,16 @@ foreign import xwayland_lib "system:wlroots-0.20"
 foreign xwayland_lib {
     wlr_xwayland_create :: proc(display: ^wl.Display, compositor: ^wlr_compositor, lazy: bool) -> ^wlr_xwayland ---
     wlr_xwayland_destroy :: proc(xwayland: ^wlr_xwayland) ---
-    wlr_xwayland_set_seat :: proc(xwayland: ^wlr_xwayland, seat: ^wlr_seat) ---
 }
 xwayland_create :: proc(display: ^wl.Display, compositor: ^wlr_compositor) -> ^wlr_xwayland {
     return wlr_xwayland_create(display,compositor,true)
 }
 xwayland_destroy :: proc(xwayland: ^wlr_xwayland) { wlr_xwayland_destroy(xwayland) }
-xwayland_seat :: proc(xwayland: ^wlr_xwayland, seat: ^wlr_seat) { wlr_xwayland_set_seat(xwayland,seat) }
 
-#assert(size_of(wlr_xwayland)==280 && align_of(wlr_xwayland)==8)
-#assert(offset_of(wlr_xwayland,server)==0 && offset_of(wlr_xwayland,display_name)==32)
-#assert(offset_of(wlr_xwayland,seat)==56 && offset_of(wlr_xwayland,events)==64)
-#assert(size_of(type_of(wlr_xwayland{}.events))==64 && align_of(type_of(wlr_xwayland{}.events))==8)
-#assert(offset_of(type_of(wlr_xwayland{}.events),destroy)==0)
-#assert(offset_of(type_of(wlr_xwayland{}.events),ready)==16)
-#assert(offset_of(type_of(wlr_xwayland{}.events),new_surface)==32)
-#assert(size_of(wlr_xwayland_server)==232 && align_of(wlr_xwayland_server)==8)
-#assert(offset_of(wlr_xwayland_server,pid)==0 && offset_of(wlr_xwayland_server,ready)==40)
-#assert(offset_of(wlr_xwayland_server,display)==56)
-#assert(offset_of(wlr_xwayland_server,events)==128)
-#assert(size_of(type_of(wlr_xwayland_server{}.events))==48 && align_of(type_of(wlr_xwayland_server{}.events))==8)
+#assert(size_of(wlr_xwayland)==280 && align_of(wlr_xwayland)==8 && offset_of(wlr_xwayland,server)==0 && offset_of(wlr_xwayland,display_name)==32 && offset_of(wlr_xwayland,events)==64)
+#assert(size_of(type_of(wlr_xwayland{}.events))==64 && align_of(type_of(wlr_xwayland{}.events))==8 && offset_of(type_of(wlr_xwayland{}.events),destroy)==0 && offset_of(type_of(wlr_xwayland{}.events),ready)==16)
+#assert(offset_of(type_of(wlr_xwayland{}.events),new_surface)==32 && size_of(wlr_xwayland_server)==232 && align_of(wlr_xwayland_server)==8 && offset_of(wlr_xwayland_server,pid)==0 && offset_of(wlr_xwayland_server,ready)==40)
+#assert(offset_of(wlr_xwayland_server,display)==56 && offset_of(wlr_xwayland_server,events)==128 && size_of(type_of(wlr_xwayland_server{}.events))==48 && align_of(type_of(wlr_xwayland_server{}.events))==8)
 #assert(offset_of(type_of(wlr_xwayland_server{}.events),start)==0)
 
 wlr_xwayland_surface_events :: struct #align(8) {
@@ -149,31 +138,17 @@ xwayland_connection :: proc(xwayland: ^wlr_xwayland) -> ^xcb.xcb_connection_t {
     if xwayland==nil { return nil }
     return wlr_xwayland_get_xwm_connection(xwayland)
 }
-#assert(size_of(wlr_xwayland_surface)==992 && align_of(wlr_xwayland_surface)==8)
-#assert(offset_of(wlr_xwayland_surface,window_id)==0 && offset_of(wlr_xwayland_surface,surface)==80)
-#assert(offset_of(wlr_xwayland_surface,x)==120 && offset_of(wlr_xwayland_surface,y)==122)
-#assert(offset_of(wlr_xwayland_surface,width)==124 && offset_of(wlr_xwayland_surface,height)==126)
-#assert(offset_of(wlr_xwayland_surface,override_redirect)==128 && offset_of(wlr_xwayland_surface,title)==136)
-#assert(offset_of(wlr_xwayland_surface,class)==144 && offset_of(wlr_xwayland_surface,instance)==152)
-#assert(offset_of(wlr_xwayland_surface,pid)==176 && offset_of(wlr_xwayland_surface,parent)==200)
-#assert(offset_of(wlr_xwayland_surface,fullscreen)==305 && offset_of(wlr_xwayland_surface,maximized_vert)==306)
-#assert(offset_of(wlr_xwayland_surface,maximized_horz)==307 && offset_of(wlr_xwayland_surface,minimized)==308)
-#assert(offset_of(wlr_xwayland_surface,events)==320 && offset_of(wlr_xwayland_surface,data)==896)
-#assert(size_of(wlr_xwayland_surface_events)==576 && align_of(wlr_xwayland_surface_events)==8)
-#assert(offset_of(wlr_xwayland_surface_events,destroy)==0)
-#assert(offset_of(wlr_xwayland_surface_events,request_configure)==16)
-#assert(offset_of(wlr_xwayland_surface_events,request_minimize)==64)
-#assert(offset_of(wlr_xwayland_surface_events,request_maximize)==80)
-#assert(offset_of(wlr_xwayland_surface_events,request_fullscreen)==96)
-#assert(offset_of(wlr_xwayland_surface_events,request_activate)==112)
-#assert(offset_of(wlr_xwayland_surface_events,associate)==256 && offset_of(wlr_xwayland_surface_events,dissociate)==272)
-#assert(offset_of(wlr_xwayland_surface_events,set_title)==288 && offset_of(wlr_xwayland_surface_events,set_class)==304)
-#assert(offset_of(wlr_xwayland_surface_events,set_geometry)==464)
-#assert(size_of(wlr_xwayland_surface_configure_event)==24 && align_of(wlr_xwayland_surface_configure_event)==8)
-#assert(offset_of(wlr_xwayland_surface_configure_event,x)==8 && offset_of(wlr_xwayland_surface_configure_event,y)==10)
-#assert(offset_of(wlr_xwayland_surface_configure_event,width)==12)
-#assert(offset_of(wlr_xwayland_surface_configure_event,height)==14)
-#assert(size_of(wlr_xwayland_minimize_event)==16 && align_of(wlr_xwayland_minimize_event)==8)
+#assert(size_of(wlr_xwayland_surface)==992 && align_of(wlr_xwayland_surface)==8 && offset_of(wlr_xwayland_surface,window_id)==0 && offset_of(wlr_xwayland_surface,surface)==80)
+#assert(offset_of(wlr_xwayland_surface,x)==120 && offset_of(wlr_xwayland_surface,y)==122 && offset_of(wlr_xwayland_surface,width)==124 && offset_of(wlr_xwayland_surface,height)==126)
+#assert(offset_of(wlr_xwayland_surface,override_redirect)==128 && offset_of(wlr_xwayland_surface,title)==136 && offset_of(wlr_xwayland_surface,class)==144 && offset_of(wlr_xwayland_surface,instance)==152)
+#assert(offset_of(wlr_xwayland_surface,pid)==176 && offset_of(wlr_xwayland_surface,parent)==200 && offset_of(wlr_xwayland_surface,fullscreen)==305 && offset_of(wlr_xwayland_surface,maximized_vert)==306)
+#assert(offset_of(wlr_xwayland_surface,maximized_horz)==307 && offset_of(wlr_xwayland_surface,minimized)==308 && offset_of(wlr_xwayland_surface,events)==320 && offset_of(wlr_xwayland_surface,data)==896)
+#assert(size_of(wlr_xwayland_surface_events)==576 && align_of(wlr_xwayland_surface_events)==8 && offset_of(wlr_xwayland_surface_events,destroy)==0 && offset_of(wlr_xwayland_surface_events,request_configure)==16)
+#assert(offset_of(wlr_xwayland_surface_events,request_minimize)==64 && offset_of(wlr_xwayland_surface_events,request_maximize)==80 && offset_of(wlr_xwayland_surface_events,request_fullscreen)==96)
+#assert(offset_of(wlr_xwayland_surface_events,request_activate)==112 && offset_of(wlr_xwayland_surface_events,associate)==256 && offset_of(wlr_xwayland_surface_events,dissociate)==272)
+#assert(offset_of(wlr_xwayland_surface_events,set_title)==288 && offset_of(wlr_xwayland_surface_events,set_class)==304 && offset_of(wlr_xwayland_surface_events,set_geometry)==464)
+#assert(size_of(wlr_xwayland_surface_configure_event)==24 && align_of(wlr_xwayland_surface_configure_event)==8 && offset_of(wlr_xwayland_surface_configure_event,x)==8 && offset_of(wlr_xwayland_surface_configure_event,y)==10)
+#assert(offset_of(wlr_xwayland_surface_configure_event,width)==12 && offset_of(wlr_xwayland_surface_configure_event,height)==14 && size_of(wlr_xwayland_minimize_event)==16 && align_of(wlr_xwayland_minimize_event)==8)
 #assert(offset_of(wlr_xwayland_minimize_event,minimize)==8)
 
 #assert(offset_of(wlr_xwayland_surface,role)==160)
@@ -182,9 +157,7 @@ xwayland_connection :: proc(xwayland: ^wlr_xwayland) -> ^xcb.xcb_connection_t {
 
 #assert(offset_of(wlr_xwayland_surface,window_type_len)==232)
 
-#assert(offset_of(wlr_xwayland_surface,hints)==264)
-#assert(offset_of(wlr_xwayland_surface_events,set_role)==320 && offset_of(wlr_xwayland_surface_events,set_parent)==336)
-#assert(offset_of(wlr_xwayland_surface_events,set_window_type)==368)
+#assert(offset_of(wlr_xwayland_surface,hints)==264 && offset_of(wlr_xwayland_surface_events,set_role)==320 && offset_of(wlr_xwayland_surface_events,set_parent)==336 && offset_of(wlr_xwayland_surface_events,set_window_type)==368)
 #assert(offset_of(wlr_xwayland_surface_events,set_hints)==384 && offset_of(wlr_xwayland_surface_events,set_icon)==496)
 
 #assert(offset_of(wlr_xwayland_surface_events,map_request)==544)

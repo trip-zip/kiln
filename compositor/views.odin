@@ -1,5 +1,7 @@
 package compositor
 
+import st "../seat"
+
 import sh "../shells"
 
 import ext "../extensions"
@@ -213,7 +215,7 @@ clear_focus :: proc(s: ^Server) {
 		s.focused = nil
 		queue_event(s, vm.Event{class = "input", name = "focus"})
 	}
-	if s.seat != nil && !locked(s) && sh.grab_surface(s.shell) == nil {wlr.wlr_seat_keyboard_notify_clear_focus(s.seat)}
+	if s.seat != nil && !locked(s) && sh.grab_surface(s.shell) == nil {st.keyboard_notify_clear_focus(s.seat)}
 }
 view_minimize :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
@@ -237,27 +239,24 @@ enter_surface :: proc(s: ^Server, target: ^wlr.wlr_surface) {
 	if grabbed := sh.grab_surface(s.shell); grabbed != nil {surface = grabbed}
 	if locked(s) {return}
 	if !s.keyboard_grabbed {
-		if kb := wlr.wlr_seat_get_keyboard(s.seat); kb != nil {
-			keys: [32]u32
-			count := 0
-			for code in kb.keycodes[:kb.num_keycodes] {
+		if kb := st.get_keyboard(s.seat); kb != nil {
+			keys := make([dynamic]u32, context.temp_allocator)
+			for code in kb.keycodes[:] {
 				consumed := true
-				for keyboard in s.keyboards {if keyboard.handle == kb {value, exists := keyboard.consumed[code]
+				for keyboard in s.keyboards {if &keyboard.keyboard == kb {value, exists := keyboard.consumed[code]
 						consumed = !exists || value
 						break}}
-				if !consumed {keys[count] = code
-					count += 1}
+				if !consumed {append(&keys, code)}
 			}
-			wlr.wlr_seat_keyboard_notify_enter(
+			st.keyboard_enter(
 				s.seat,
 				surface,
-				raw_data(keys[:]),
-				uint(count),
-				&kb.modifiers,
+				keys[:],
+				kb.modifiers,
 			)
 		} else {
-			modifiers: wlr.wlr_keyboard_modifiers
-			wlr.wlr_seat_keyboard_notify_enter(s.seat, surface, nil, 0, &modifiers)
+			modifiers: st.Modifiers
+			st.keyboard_enter(s.seat, surface, nil, modifiers)
 		}
 	}
 }

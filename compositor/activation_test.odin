@@ -1,5 +1,7 @@
 package compositor
 
+import st "../seat"
+
 import sh "../shells"
 
 import ext "../extensions"
@@ -13,7 +15,7 @@ import vm "../lua_runtime"
 @(test)
 activation_owns_payload_and_retires_mints :: proc(t: ^testing.T) {
     s:=Server{display=wl.create()}
-    s.seat=wlr.wlr_seat_create(s.display,"activation")
+    s.seat=st.create(s.display,"activation")
     s.activation=ext.activation_create(s.display)
     testing.expect(t,s.activation!=nil && s.seat!=nil)
     defer destroy(&s)

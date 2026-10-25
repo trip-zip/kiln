@@ -1,5 +1,7 @@
 package compositor
 
+import st "../seat"
+
 import sh "../shells"
 
 import ext "../extensions"
@@ -74,9 +76,9 @@ Server :: struct {
 	popups:                                                                               [dynamic]^Popup,
 	new_output, layout_change, backend_destroy:                                           wl.Listener,
 	failed:                                                                               bool,
-	seat:                                                                                 ^wlr.wlr_seat,
-	cursor:                                                                               ^wlr.wlr_cursor,
-	cursor_manager:                                                                       ^wlr.wlr_xcursor_manager,
+	seat:                                                                                 ^st.Seat,
+	cursor_x, cursor_y: f64,
+	cursor_manager:                                                                       ^st.Cursor_Manager,
 	cursor_name:                                                                          cstring,
 	cursor_name_allocator:                                                                runtime.Allocator,
 	cursor_named:                                                                         bool,
@@ -85,16 +87,15 @@ Server :: struct {
 	popup_previous: ^wlr.Surface,
 	popup_grab_active: bool,
 	new_toplevel, new_popup, new_input:                                                   wl.Listener,
-	cursor_motion, cursor_absolute, cursor_button, cursor_axis, cursor_frame:             wl.Listener,
 	request_cursor, request_selection:                                                    wl.Listener,
 	request_primary_selection, request_drag, start_drag, drag_destroy, drag_icon_destroy: wl.Listener,
 	drag_active:                                                                          bool,
-	drag_icon:                                                                            ^wlr.wlr_drag_icon,
+	drag_icon:                                                                            ^st.Drag_Icon,
 	drag_dx, drag_dy:                                                                     i32,
 	drag_commit:                                                                          wl.Listener,
-	constraints:                                                                          ^wlr.wlr_pointer_constraints_v1,
+	constraints:                                                                          ^st.Constraint_Manager,
 	relative:                                                                             ^ext.Relative_Manager,
-	active_constraint:                                                                    ^wlr.wlr_pointer_constraint_v1,
+	active_constraint:                                                                    ^st.Constraint,
 	constraint_owners:                                                                    [dynamic]^Constraint,
 	new_constraint, pointer_focus_change, request_cursor_shape:                           wl.Listener,
 	views:                                                                                [dynamic]^View,
@@ -169,11 +170,6 @@ destroy :: proc(s: ^Server) {
 	wl.unlisten(&s.new_layer)
 	wl.unlisten(&s.new_decoration)
 	wl.unlisten(&s.new_input)
-	wl.unlisten(&s.cursor_motion)
-	wl.unlisten(&s.cursor_absolute)
-	wl.unlisten(&s.cursor_button)
-	wl.unlisten(&s.cursor_axis)
-	wl.unlisten(&s.cursor_frame)
 	wl.unlisten(&s.request_cursor_shape)
 	wl.unlisten(&s.request_cursor)
 	wl.unlisten(&s.request_selection)
@@ -196,9 +192,8 @@ destroy :: proc(s: ^Server) {
 	)
 	wl.unlisten(&s.cursor_surface_destroy)
 	wl.unlisten(&s.cursor_surface_commit)
-	if s.cursor_manager != nil {wlr.wlr_xcursor_manager_destroy(s.cursor_manager)}
+	if s.cursor_manager != nil {st.xcursor_manager_destroy(s.cursor_manager)}
 	if s.cursor_name != nil {delete(s.cursor_name, s.cursor_name_allocator)}
-	if s.cursor != nil {wlr.wlr_cursor_destroy(s.cursor)}
 	if s.scene != nil {sp.scene_destroy(s.scene)}
 	if s.layout != nil {wlr.wlr_output_layout_destroy(s.layout)}
 	gles.destroy(s.gles)
@@ -249,7 +244,6 @@ run :: proc(startup_command := "") -> bool {
 	if compositor == nil {return false}
 	if wlr.wlr_subcompositor_create(s.display) == nil {return false}
 	if !wlr.density_protocols_create(s.display) {return false}
-	if wlr.wlr_data_device_manager_create(s.display) == nil {return false}
 	s.layout = wlr.wlr_output_layout_create(s.display)
 	if s.layout == nil {return false}
 	wl.listen(&s.layout.events.change, &s.layout_change, output_layout_changed)
@@ -274,28 +268,15 @@ run :: proc(startup_command := "") -> bool {
 	if deco == nil {return false}
 	wl.listen(&deco.events.new_toplevel_decoration, &s.new_decoration, decoration_added)
 	if !init_input(&s) {return false}
+	if !init_data(&s) {return false}
+	if !init_constraints(&s) {return false}
 	if !init_idle(&s) {return false}
 	if !init_lock(&s) {return false}
 	shape := ext.cursor_shape_create(s.display)
 	if shape == nil {return false}
 	wl.listen(&shape.events.request_set_shape, &s.request_cursor_shape, cursor_shape_requested)
-	s.constraints = wlr.constraints_create(s.display)
 	s.relative = ext.relative_create(s.display)
-	if s.constraints == nil || s.relative == nil {return false}
-	wl.listen(&s.constraints.events.new_constraint, &s.new_constraint, constraint_added)
-	wl.listen(
-		&s.seat.pointer_state.events.focus_change,
-		&s.pointer_focus_change,
-		pointer_focus_changed,
-	)
-	if !wlr.primary_selection_create(s.display) {return false}
-	wl.listen(
-		&s.seat.events.request_set_primary_selection,
-		&s.request_primary_selection,
-		primary_selection_requested,
-	)
-	wl.listen(&s.seat.events.request_start_drag, &s.request_drag, drag_requested)
-	wl.listen(&s.seat.events.start_drag, &s.start_drag, drag_started)
+	if s.relative == nil {return false}
 	s.foreign_manager = ext.foreign_manager_create(s.display)
 	if s.foreign_manager == nil {return false}
 	s.activation = ext.activation_create(s.display)

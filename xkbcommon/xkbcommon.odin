@@ -23,6 +23,13 @@ XKB_KEYMAP_COMPILE_NO_FLAGS :: 0
 XKB_KEY_Escape :: 0xff1b
 
 foreign lib {
+	xkb_keymap_led_get_index :: proc(keymap: ^xkb_keymap, name: cstring) -> u32 ---
+	xkb_state_led_index_is_active :: proc(state: ^xkb_state, index: u32) -> c.int ---
+	xkb_keymap_ref :: proc(keymap: ^xkb_keymap) -> ^xkb_keymap ---
+	xkb_keymap_get_as_string :: proc(keymap: ^xkb_keymap, format: c.int) -> cstring ---
+	xkb_state_update_key :: proc(state: ^xkb_state, key: xkb_keycode_t, direction: c.int) -> c.int ---
+	xkb_state_serialize_mods :: proc(state: ^xkb_state, components: c.int) -> u32 ---
+	xkb_state_serialize_layout :: proc(state: ^xkb_state, components: c.int) -> u32 ---
 	xkb_state_key_get_utf8 :: proc(state: ^xkb_state, key: xkb_keycode_t, buffer: cstring, size: c.size_t) -> c.int ---
 	xkb_keymap_mod_get_index :: proc(keymap: ^xkb_keymap, name: cstring) -> u32 ---
 	xkb_compose_table_new_from_locale :: proc(ctx: ^xkb_context, locale: cstring, flags: c.int) -> ^xkb_compose_table ---

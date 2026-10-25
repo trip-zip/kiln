@@ -1,6 +1,8 @@
 package wlroots
 
 // Damage remains borrowed protocol state while wlroots owns surfaces.
+pixman_region32_t :: struct #align(8) { _opaque: [24]u8 }
+#assert(size_of(pixman_region32_t)==24 && align_of(pixman_region32_t)==8)
 foreign import pixman_lib "system:pixman-1"
 pixman_box32_t :: struct {
 	x1, y1, x2, y2: i32,

@@ -1,5 +1,7 @@
 package shells
 
+import st "../seat"
+
 import p "../protocols"
 import wl "../wayland"
 import wlr "../wlroots"
@@ -10,7 +12,7 @@ Shell :: struct {
 	global: ^wl.Global,
 	surfaces: [dynamic]^Xdg_Surface,
 	events: struct { new_toplevel, new_popup, grab_changed: wl.Signal },
-	grab_seat: ^wlr.wlr_seat_client,
+	grab_seat: ^st.Client,
 	grab_chain: [dynamic]^Popup,
 	grab_destroy: wl.Listener,
 	dismissing: bool,

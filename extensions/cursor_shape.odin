@@ -1,8 +1,9 @@
 package extensions
 
+import st "../seat"
+
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:fmt"
 
@@ -11,10 +12,10 @@ Cursor_Shape_Manager :: struct {
 	devices: [dynamic]^Cursor_Shape_Device,
 	focus: [dynamic]^Cursor_Shape_Focus,
 	events: struct { request_set_shape, destroy: wl.Signal },
-	destroy, posted: wl.Listener,
+	destroy: wl.Listener,
 }
 Cursor_Shape_Event :: struct {
-	seat_client: ^wlr.wlr_seat_client,
+	seat_client: ^st.Client,
 	device_type: i32,
 	serial: u32,
 	shape: i32,
@@ -22,7 +23,7 @@ Cursor_Shape_Event :: struct {
 Cursor_Shape_Device :: struct { manager: ^Cursor_Shape_Manager, resource: ^wl.Resource, focus: ^Cursor_Shape_Focus }
 Cursor_Shape_Focus :: struct {
 	manager: ^Cursor_Shape_Manager,
-	client: ^wlr.wlr_seat_client,
+	client: ^st.Client,
 	serial: u32,
 	entered: bool,
 	destroy: wl.Listener,
@@ -48,14 +49,17 @@ cursor_shape_create :: proc(display: ^wl.Display) -> ^Cursor_Shape_Manager {
 	m.global = wl.global_create_typed(display, &p.wp_cursor_shape_manager_v1, 2, m, cursor_shape_request)
 	if m.global == nil { free(m); return nil }
 	wl.listen(&display.destroy_signal, &m.destroy, cursor_shape_destroyed)
-	wl.listen(&display.posted, &m.posted, cursor_shape_posted)
+	append(&cursor_shape_managers, m)
+	st.cursor_shape_entered = cursor_shape_entered
+	st.cursor_shape_capabilities = cursor_shape_capabilities
 	return m
 }
-cursor_shape_focus :: proc(m: ^Cursor_Shape_Manager, client: ^wlr.wlr_seat_client) -> ^Cursor_Shape_Focus {
+cursor_shape_focus :: proc(m: ^Cursor_Shape_Manager, client: ^st.Client) -> ^Cursor_Shape_Focus {
 	if client == nil { return nil }
 	for f in m.focus { if f.client == client { return f } }
 	f := new(Cursor_Shape_Focus)
 	f.manager, f.client = m, client
+	f.serial, f.entered = client.enter_serial, client.pointer_entered
 	append(&m.focus, f)
 	wl.listen(&client.events.destroy, &f.destroy, cursor_shape_client_destroyed)
 	return f
@@ -66,22 +70,22 @@ cursor_shape_focus_release :: proc(f: ^Cursor_Shape_Focus) {
 	wl.unlisten(&f.destroy)
 	free(f)
 }
-cursor_shape_client_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+cursor_shape_client_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	f := wl.owner(listener, Cursor_Shape_Focus, "destroy")
 	context = f.manager.global.display.loop.ctx
 	cursor_shape_focus_release(f)
 }
-cursor_shape_posted :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
-	m := wl.owner(listener, Cursor_Shape_Manager, "posted")
-	context = m.global.display.loop.ctx
-	e := cast(^wl.Posted_Event)data
-	if e.resource.interface == &p.wl_pointer && (e.opcode == u32(p.Wl_Pointer_Event.enter) || e.opcode == u32(p.Wl_Pointer_Event.leave)) {
-		f := cursor_shape_focus(m, pointer_seat_client_of(e.resource))
-		if f != nil { f.serial, f.entered = u32(e.args[0].(wl.Uint)), e.opcode == u32(p.Wl_Pointer_Event.enter) }
-	} else if e.resource.interface == &p.wl_seat && e.opcode == u32(p.Wl_Seat_Event.capabilities) && u32(e.args[0].(wl.Uint))&1 == 0 {
-		client := seat_client_of(e.resource)
+cursor_shape_managers: [dynamic]^Cursor_Shape_Manager
+cursor_shape_entered :: proc(client: ^st.Client, serial: u32) {
+	for m in cursor_shape_managers {
+		if m.global.display != client.seat.display { continue }
+		f := cursor_shape_focus(m, client)
+		f.serial, f.entered = serial, serial != 0
+	}
+}
+cursor_shape_capabilities :: proc(client: ^st.Client, caps: u32) {
+	if caps&1 != 0 { return }
+	for m in cursor_shape_managers {
 		for d in m.devices { if d.focus != nil && d.focus.client == client { d.focus = nil } }
 	}
 }
@@ -89,7 +93,8 @@ cursor_shape_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	m := wl.owner(listener, Cursor_Shape_Manager, "destroy")
 	context = m.global.display.loop.ctx
-	wl.unlisten(&m.posted)
+	for other, i in cursor_shape_managers { if other == m { ordered_remove(&cursor_shape_managers, i); break } }
+	if len(cursor_shape_managers) == 0 { delete(cursor_shape_managers); cursor_shape_managers = nil }
 	for len(m.devices) > 0 { wl.resource_destroy(m.devices[len(m.devices)-1].resource) }
 	for len(m.focus) > 0 { cursor_shape_focus_release(m.focus[len(m.focus)-1]) }
 	wl.signal_emit_final(&m.events.destroy, m)

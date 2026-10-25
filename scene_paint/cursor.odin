@@ -1,5 +1,7 @@
 package scene_paint
 
+import st "../seat"
+
 import "../gles"
 import paint "../paint"
 import wlr "../wlroots"
@@ -16,7 +18,7 @@ Cursor :: struct {
 cursor_set :: proc(
 	o: ^Output,
 	surface: ^wlr.Surface,
-	image: ^wlr.wlr_xcursor_image,
+	image: ^st.Cursor_Image,
 	x, y: f64,
 	hx, hy: i32,
 ) {

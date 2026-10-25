@@ -1,10 +1,11 @@
 package compositor
 
+import st "../seat"
+
 import sh "../shells"
 
 import ext "../extensions"
 import wl "../wayland"
-import wlr "../wlroots"
 import "core:fmt"
 import "core:strings"
 import "core:testing"
@@ -60,10 +61,10 @@ owned_activation_mints_serial_validation_and_single_use :: proc(t: ^testing.T) {
 	for _ in 0..<130 { extension_focus(s, &b); serial = extension_focus(s, &a) }
 	seat_client := ext.seat_client_of(wl.client_get_object(a.client, 3))
 	// A full wlroots ring deliberately accepts evicted serials; only half-range age is unambiguously stale.
-	testing.expect(t, wlr.wlr_seat_client_validate_event_serial(seat_client, old_enter))
+	testing.expect(t, st.valid_serial(seat_client, old_enter))
 	stale := serial-0x80000000
-	testing.expect(t, !wlr.wlr_seat_client_validate_event_serial(seat_client, stale))
-	testing.expect(t, wlr.wlr_seat_client_validate_event_serial(seat_client, serial))
+	testing.expect(t, !st.valid_serial(seat_client, stale))
+	testing.expect(t, st.valid_serial(seat_client, serial))
 	for valid in ([2]bool{false, true}) {
 		extension_send(&a, []u32{7, 12<<16|1, 8, 8, 16<<16, serial if valid else stale, 3,
 			8, 12<<16|2, 6})
@@ -138,7 +139,7 @@ owned_activation_commit_reuse_and_destroyed_seat_are_safe :: proc(t: ^testing.T)
 		extension_send(&c, []u32{7, 12<<16|1, 8, 8, 16<<16, serial, 3, 8, 12<<16|2, 6})
 		extension_pump(&c)
 		if mode == 0 {
-			wlr_seat_destroy(s.seat)
+			st.destroy(s.seat)
 			s.seat = nil
 		}
 		extension_send(&c, []u32{8, 8<<16|3})

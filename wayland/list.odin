@@ -49,18 +49,25 @@ signal_emit_mutable :: proc(signal: ^Signal, data: rawptr) {
 		listener := runtime.container_of(link, Listener, "link")
 		list_remove(&cursor.link)
 		insert(link, cast(^List)rawptr(&cursor.link))
-		listener.notify(listener, data)
+		if listener.notify != nil { listener.notify(listener, data) } else { odin_listeners[listener](listener, data) }
 	}
 	list_remove(&cursor.link)
 	list_remove(&end.link)
 }
 signal_emit_final :: proc(signal: ^Signal, data: rawptr) {
-	// Destruction listeners may free their own storage without unlinking it.
-	for !empty(&signal.listener_list) {
-		link := signal.listener_list.next
+	// Detached links let destruction callbacks free the signal owner as well as themselves.
+	pending: List
+	init(&pending)
+	insert_list(cast(^List)rawptr(&pending), &signal.listener_list)
+	init(&signal.listener_list)
+	for !empty(&pending) {
+		link := pending.next
 		listener := runtime.container_of(link, Listener, "link")
 		list_remove(link)
 		init(link)
-		listener.notify(listener, data)
+		callback := odin_listeners[listener]
+		delete_key(&odin_listeners, listener)
+		if len(odin_listeners) == 0 { delete(odin_listeners); odin_listeners = nil }
+		if listener.notify != nil { listener.notify(listener, data) } else { callback(listener, data) }
 	}
 }

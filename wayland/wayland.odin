@@ -15,8 +15,22 @@ terminate :: proc(display: ^Display) { display.terminated = true }
 event_loop :: proc(display: ^Display) -> ^Loop { return display.loop }
 add_socket :: display_add_socket
 add_destroy_listener :: proc(display: ^Display, listener: ^Listener) { signal_add(&display.destroy_signal, listener) }
-listen :: proc(signal: ^Signal, listener: ^Listener, notify: Notify) { listener.notify = notify; signal_add(signal, listener) }
-unlisten :: proc(listener: ^Listener) { if listener.link.next != nil { list_remove(&listener.link) } }
+listen_c :: proc(signal: ^Signal, listener: ^Listener, notify: Notify) { listener.notify = notify; signal_add(signal, listener) }
+listen :: proc{listen_c, listen_odin}
+Odin_Notify :: #type proc(^Listener, rawptr)
+// Side storage preserves the listener layout shared with backend C signals.
+odin_listeners: map[^Listener]Odin_Notify
+listen_odin :: proc(signal: ^Signal, listener: ^Listener, notify: Odin_Notify) {
+	if odin_listeners == nil { odin_listeners = make(map[^Listener]Odin_Notify, runtime.default_context().allocator) }
+	odin_listeners[listener] = notify
+	listener.notify = nil
+	signal_add(signal, listener)
+}
+unlisten :: proc(listener: ^Listener) {
+	if listener.link.next != nil { list_remove(&listener.link) }
+	delete_key(&odin_listeners, listener)
+	if len(odin_listeners) == 0 { delete(odin_listeners); odin_listeners = nil }
+}
 Iterator :: struct { head, next: ^List }
 iterate :: proc(head: ^List) -> Iterator { return {head, head.next} }
 next :: proc(it: ^Iterator) -> (link: ^List, ok: bool) {

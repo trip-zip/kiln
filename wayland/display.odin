@@ -11,7 +11,7 @@ core_interfaces: Core_Interfaces
 Display :: struct {
 	loop: ^Loop,
 	clients, globals, registries, sockets: List,
-	destroy_signal, posted: Signal,
+	destroy_signal: Signal,
 	next_global, serial: u32,
 	terminated, debug: bool,
 }
@@ -35,7 +35,6 @@ display_create :: proc() -> ^Display {
 	display.loop, display.next_global = loop, 1
 	init(&display.clients); init(&display.globals); init(&display.registries); init(&display.sockets)
 	signal_init(&display.destroy_signal)
-	signal_init(&display.posted)
 	debug := os.get_env("WAYLAND_DEBUG", context.temp_allocator)
 	display.debug = debug == "1" || debug == "server"
 	return display
@@ -173,3 +172,5 @@ display_add_socket :: proc(display: ^Display, name: string) -> bool {
 	ok = true
 	return true
 }
+
+next_serial :: proc(display: ^Display) -> u32 { display.serial += 1; return display.serial }

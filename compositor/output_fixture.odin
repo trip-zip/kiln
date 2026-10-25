@@ -213,7 +213,7 @@ when #config(KILN_OUTPUT_FIXTURE, false) {
 						x         = .9,
 						y         = .9,
 					}
-					cursor_absolute(&s.cursor_absolute, &event)
+					cursor_absolute(&p.absolute, &event)
 					found = true
 					break
 				}

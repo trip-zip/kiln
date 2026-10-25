@@ -46,7 +46,7 @@ wl_display_get_event_loop :: proc "c" (d: ^wl.Display) -> ^wl.Loop { context = b
 @(export, link_name = "wl_display_get_serial")
 wl_display_get_serial :: proc "c" (d: ^wl.Display) -> u32 { context = bridge_context; return d.serial }
 @(export, link_name = "wl_display_next_serial")
-wl_display_next_serial :: proc "c" (d: ^wl.Display) -> u32 { context = bridge_context; d.serial += 1; return d.serial }
+wl_display_next_serial :: proc "c" (d: ^wl.Display) -> u32 { context = bridge_context; return wl.next_serial(d) }
 @(export, link_name = "wl_client_create")
 wl_client_create :: proc "c" (d: ^wl.Display, fd: i32) -> ^wl.Client { context = bridge_context; return wl.client_create(d, fd) }
 @(export, link_name = "wl_client_destroy")

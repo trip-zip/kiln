@@ -4,7 +4,6 @@ import wl "../wayland"
 import "base:runtime"
 import "core:math"
 
-
 Box :: wlr_box
 Render_Buffer :: wlr_buffer
 Surface :: wlr_surface

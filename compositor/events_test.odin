@@ -1,5 +1,7 @@
 package compositor
 
+import st "../seat"
+
 import sh "../shells"
 
 
@@ -120,12 +122,11 @@ pointer_motion_precedes_enter_and_keeps_optional_fields :: proc(t: ^testing.T) {
 	testing.expect(t, s.display != nil)
 	defer destroy(&s)
 	s.layout = wlr.wlr_output_layout_create(s.display)
-	s.cursor = wlr.wlr_cursor_create()
-	s.cursor_manager = wlr.wlr_xcursor_manager_create(nil, 24)
-	s.seat = wlr.wlr_seat_create(s.display, "test")
+	s.cursor_manager = st.xcursor_manager_create(nil, 24)
+	s.seat = st.create(s.display, "test")
 	testing.expect(
 		t,
-		s.layout != nil && s.cursor != nil && s.cursor_manager != nil && s.seat != nil,
+		s.layout != nil && s.cursor_manager != nil && s.seat != nil,
 	)
 	pointer_motion(&s, 1)
 	testing.expect_value(t, len(s.events), 2)
@@ -149,8 +150,8 @@ keyboard_teardown_does_not_access_destroyed_runtime :: proc(t: ^testing.T) {
 	kb := Keyboard {
 		server = &s,
 	}
-	keyboard_key(&kb.key, nil)
-	keyboard_modifiers(&kb.modifiers, nil)
+	keyboard_key(&kb.key_event, nil)
+	keyboard_modifiers(&kb.modifiers_event, nil)
 	testing.expect_value(t, len(s.events), 0)
 }
 
@@ -162,9 +163,8 @@ queued_claim_transitions_and_owned_text :: proc(t: ^testing.T) {
 	testing.expect(t, s.display != nil)
 	defer destroy(&s)
 	s.layout = wlr.wlr_output_layout_create(s.display)
-	s.cursor = wlr.wlr_cursor_create()
-	s.cursor_manager = wlr.wlr_xcursor_manager_create(nil, 24)
-	s.seat = wlr.wlr_seat_create(s.display, "queue")
+	s.cursor_manager = st.xcursor_manager_create(nil, 24)
+	s.seat = st.create(s.display, "queue")
 	s.buttons = make(map[u32]bool)
 	s.buttons[272] = true
 	s.lua.data = &s

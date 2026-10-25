@@ -51,12 +51,11 @@ xwayland_check_start :: proc(data: rawptr) -> i32 {
 xwayland_ready :: proc "c" (listener: ^wl.Listener, data: rawptr) {
     context=runtime.default_context()
     s:=wl.owner(listener,Server,"xwayland_ready")
-    wlr.xwayland_seat(s.xwayland,s.seat)
     connection:=wlr.xwayland_connection(s.xwayland)
     for name,i in X11_ATOMS { s.x11_atoms[i]=xcb.intern(connection,name) }
     wl.remove_source(s.xwayland_watch);s.xwayland_watch=nil
-    fmt.printf("XWayland ready DISPLAY=%s seat=%v launcher_pid=%d (wlroots reaped)\n",
-        s.xwayland.display_name,s.xwayland.seat==s.seat,s.xwayland.server.pid)
+    fmt.printf("XWayland ready DISPLAY=%s launcher_pid=%d (wlroots reaped)\n",
+        s.xwayland.display_name,s.xwayland.server.pid)
 }
 xwayland_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
     context=runtime.default_context()

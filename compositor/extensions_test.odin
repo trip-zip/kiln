@@ -1,5 +1,7 @@
 package compositor
 
+import st "../seat"
+
 import ext "../extensions"
 import p "../protocols"
 import wl "../wayland"
@@ -11,8 +13,7 @@ import "core:sys/linux"
 import "core:testing"
 import "core:time"
 
-foreign import extension_test_lib "system:wlroots-0.20"
-foreign extension_test_lib { wlr_seat_destroy :: proc(seat: ^wlr.wlr_seat) --- }
+
 Extension_Client :: struct { display: ^wl.Display, client: ^wl.Client, peer: wl.Connection }
 extension_send :: proc(c: ^Extension_Client, words: []u32) {
 	assert(wl.connection_queue(&c.peer, (cast([^]u8)raw_data(words))[:len(words)*4], nil) == .NONE)
@@ -62,14 +63,16 @@ extension_server :: proc() -> ^Server {
 	wire.install()
 	s := new(Server)
 	s.display = wl.create()
-	s.seat = wlr.wlr_seat_create(s.display, "extension-test")
-	wlr.wlr_seat_set_capabilities(s.seat, 1)
+	s.seat = st.create(s.display, "extension-test")
+	st.set_capabilities(s.seat, 1)
 	assert(wlr.wlr_compositor_create(s.display, 6, nil) != nil)
 	return s
 }
 extension_finish :: proc(s: ^Server) {
 	s.shutting_down = true
 	wl.destroy_clients(s.display)
+	wl.unlisten(&s.new_constraint); wl.unlisten(&s.pointer_focus_change)
+	delete(s.constraint_owners)
 	wl.unlisten(&s.new_idle_inhibitor)
 	wl.unlisten(&s.request_cursor_shape)
 	wl.unlisten(&s.request_activate)
@@ -105,7 +108,7 @@ extension_client :: proc(s: ^Server, version: u32 = 5) -> Extension_Client {
 	return c
 }
 extension_focus :: proc(s: ^Server, c: ^Extension_Client, pointer_id: u32 = 4) -> u32 {
-	wlr.wlr_seat_pointer_notify_enter(s.seat, ext.surface_of(wl.client_get_object(c.client, 6)), 0, 0)
+	st.pointer_notify_enter(s.seat, ext.surface_of(wl.client_get_object(c.client, 6)), 0, 0)
 	e := extension_event(extension_pump(c), pointer_id, 0)
 	assert(e != nil)
 	return wl.word_read(e, 8)
@@ -125,7 +128,7 @@ idle_notifications_timeout_activity_inhibition_and_lifetime :: proc(t: ^testing.
 	events := extension_pump(&c, 30)
 	testing.expect(t, extension_event(events, 8, 0) != nil && wl.monotonic_ns()-start >= 20_000_000)
 	testing.expect(t, extension_event(extension_pump(&c, 25), 8, 0) == nil, "no duplicate idled")
-	other := wlr.wlr_seat_create(s.display, "other-seat")
+	other := st.create(s.display, "other-seat")
 	ext.idle_activity(s.idle_notifier, other)
 	testing.expect(t, extension_event(extension_pump(&c), 8, 1) == nil, "activity is seat-specific")
 	idle_activity(s)
@@ -155,7 +158,7 @@ idle_notifications_timeout_activity_inhibition_and_lifetime :: proc(t: ^testing.
 	extension_send(&c, []u32{7, 8<<16, 9, 8<<16})
 	extension_pump(&c)
 	testing.expect_value(t, len(s.idle_notifier.notifications), 5)
-	wlr_seat_destroy(s.seat)
+	st.destroy(s.seat)
 	s.seat = nil
 	for n in s.idle_notifier.notifications { testing.expect(t, n.seat == nil && n.timer == nil) }
 	events = extension_pump(&c, 30)
@@ -228,8 +231,8 @@ cursor_shape_focus_serials_capabilities_and_names :: proc(t: ^testing.T) {
 	extension_send(&a, []u32{8, 16<<16|1, serial-1, 4})
 	extension_pump(&a)
 	testing.expect_value(t, string(s.cursor_name), "text")
-	button := wlr.wlr_seat_pointer_notify_button(s.seat, 1, 272, 1)
-	wlr.wlr_seat_pointer_notify_button(s.seat, 2, 272, 0)
+	button := st.pointer_notify_button(s.seat, 1, 272, 1)
+	st.pointer_notify_button(s.seat, 2, 272, 0)
 	extension_pump(&a)
 	extension_send(&a, []u32{8, 16<<16|1, button, 3})
 	extension_pump(&a)
@@ -251,9 +254,9 @@ cursor_shape_focus_serials_capabilities_and_names :: proc(t: ^testing.T) {
 	extension_pump(&b)
 	testing.expect_value(t, string(s.cursor_name), "wait")
 	s.pointer_grabbed = false
-	wlr.wlr_seat_set_capabilities(s.seat, 0)
+	st.set_capabilities(s.seat, 0)
 	extension_pump(&b)
-	wlr.wlr_seat_set_capabilities(s.seat, 1)
+	st.set_capabilities(s.seat, 1)
 	extension_pump(&b)
 	extension_send(&b, []u32{3, 12<<16, 9})
 	enter := extension_event(extension_pump(&b), 9, 0)
@@ -321,7 +324,7 @@ relative_pointer_delivers_only_to_focus_with_microsecond_timestamp :: proc(t: ^t
 		for want, at in ([]i32{384, -576, 1, -1}) { testing.expect_value(t, i32(wl.word_read(e, 16+at*4)), want) }
 		testing.expect(t, extension_event(extension_pump(other), 8, 0) == nil)
 	}
-	wlr.wlr_seat_pointer_notify_clear_focus(s.seat)
+	st.pointer_notify_clear_focus(s.seat)
 	extension_pump(&b)
 	ext.relative_motion(m, s.seat, stamp, 1, 2, 3, 4)
 	testing.expect(t, extension_event(extension_pump(&b), 8, 0) == nil)
@@ -330,14 +333,14 @@ relative_pointer_delivers_only_to_focus_with_microsecond_timestamp :: proc(t: ^t
 	extension_pump(&b)
 	ext.relative_motion(m, s.seat, stamp, 1, 2, 3, 4)
 	testing.expect(t, extension_event(extension_pump(&b), 8, 0) != nil)
-	wlr.wlr_seat_set_capabilities(s.seat, 0)
+	st.set_capabilities(s.seat, 0)
 	extension_pump(&b)
 	ext.relative_motion(m, s.seat, stamp, 1, 2, 3, 4)
 	testing.expect(t, extension_event(extension_pump(&b), 8, 0) == nil)
 	extension_send(&b, []u32{4, 8<<16|1})
 	extension_pump(&b)
 	testing.expect(t, m.pointers[1].pointer == nil && m.pointers[1].seat == nil)
-	wlr_seat_destroy(s.seat)
+	st.destroy(s.seat)
 	s.seat = nil
 	for r in m.pointers { testing.expect(t, r.seat == nil && r.pointer == nil) }
 	fmt.printf("Relative motion: focused clients only, wl_pointer v1/v5, timestamp %d us split %d:%d, signed 24.8 deltas and lifetime passed\n", u64(stamp)*1000, (u64(stamp)*1000)>>32, u32(u64(stamp)*1000))
@@ -378,7 +381,7 @@ cursor_shape_tablet_is_inert_and_seat_destroy_releases_focus :: proc(t: ^testing
 	extension_send(&c, []u32{7, 16<<16|2, 9, 8, 9, 16<<16|1, 0, 0, 7, 16<<16|1, 10, 4})
 	testing.expect(t, extension_event(extension_pump(&c), 1, 0) == nil)
 	testing.expect(t, m.devices[0].focus == nil && m.devices[1].focus != nil)
-	wlr_seat_destroy(s.seat)
+	st.destroy(s.seat)
 	s.seat = nil
 	testing.expect_value(t, len(m.focus), 0)
 	for d in m.devices { testing.expect(t, d.focus == nil) }

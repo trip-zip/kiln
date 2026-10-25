@@ -62,8 +62,6 @@ resource_destroy :: proc(resource: ^Resource) {
 	}
 	free(resource)
 }
-// Observers borrow the event for the duration of post and must not destroy its resources.
-Posted_Event :: struct { resource: ^Resource, opcode: u32, args: []Argument }
 post :: proc(resource: ^Resource, opcode: u32, args: ..Argument) {
 	client := resource.client
 	if client.failed { return }
@@ -80,9 +78,6 @@ post :: proc(resource: ^Resource, opcode: u32, args: ..Argument) {
 	if connection_queue(&client.connection, bytes[:size], fds[:count]) != .NONE {
 		for fd in fds[:count] { linux.close(fd) }
 		client.failed = true
-	} else if !empty(&client.display.posted.listener_list) {
-		event := Posted_Event{resource, opcode, args}
-		signal_emit_mutable(&client.display.posted, &event)
 	}
 }
 post_error :: proc(resource: ^Resource, code: u32, message: string) {

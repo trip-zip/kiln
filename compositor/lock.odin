@@ -1,5 +1,7 @@
 package compositor
 
+import st "../seat"
+
 import sp "../scene_paint"
 
 import layout "../layout"
@@ -59,6 +61,7 @@ lock_cover :: proc(s: ^Server) {
 	}
 }
 lock_reset_input :: proc(s: ^Server) {
+	st.drag_cancel(s.seat)
 	s.keyboard_epoch += 1
 	s.pointer_epoch += 1
 	s.keyboard_grabbed = false
@@ -67,16 +70,15 @@ lock_reset_input :: proc(s: ^Server) {
 	for kb in s.keyboards {
 		keymap.compose_reset(kb.compose)
 		for code in kb.consumed {kb.consumed[code] = true}
-		for code in kb.handle.keycodes[:kb.handle.num_keycodes] {kb.consumed[code] = true}
+		for code in kb.keycodes[:] {kb.consumed[code] = true}
 	}
 	for code, consumed in s.buttons {
-		if !consumed {wlr.wlr_seat_pointer_notify_button(s.seat, 0, code, 0)}
+		if !consumed {st.pointer_notify_button(s.seat, 0, code, 0)}
 		s.buttons[code] = true
 	}
 	sh.grab_dismiss(s.shell)
-	wlr.seat_end_grabs(s.seat)
-	wlr.wlr_seat_keyboard_notify_clear_focus(s.seat)
-	wlr.wlr_seat_pointer_clear_focus(s.seat)
+	st.keyboard_notify_clear_focus(s.seat)
+	st.pointer_clear_focus(s.seat)
 	constraint_sync(s)
 }
 lock_engage :: proc(s: ^Server, owner: Lock_Owner) {
@@ -181,12 +183,12 @@ lock_focus :: proc(s: ^Server) {
 	if s.lock_owner != .External {return}
 	for p in s.lock_surfaces {
 		if !p.handle.output.enabled || !p.handle.surface.mapped {continue}
-		m: wlr.wlr_keyboard_modifiers
+		m: st.Modifiers
 		// Empty enter prevents pre-lock held keys from becoming locker input.
-		wlr.wlr_seat_keyboard_notify_enter(s.seat, p.handle.surface, nil, 0, &m)
+		st.keyboard_enter(s.seat, p.handle.surface, nil, m)
 		return
 	}
-	wlr.wlr_seat_keyboard_notify_clear_focus(s.seat)
+	st.keyboard_notify_clear_focus(s.seat)
 }
 lock_surface_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
@@ -261,13 +263,13 @@ lock_input :: proc(s: ^Server, e: ^vm.Event) -> bool {
 		if s.lock_owner == .Native &&
 		   e.class ==
 			   "session" {vm.deliver(&s.lua, e)} else if s.lock_owner == .External && e.native == .Key && s.seat.keyboard_state.focused_surface != nil {
-			wlr.wlr_seat_set_keyboard(s.seat, kb.handle)
-			wlr.wlr_seat_keyboard_notify_key(s.seat, e.time, e.code, u32(e.pressed))
+			st.set_keyboard(s.seat, &kb.keyboard)
+			st.keyboard_notify_key(s.seat, e.time, e.code, u32(e.pressed))
 		}
 	} else if e.native == .Modifiers && s.lock_owner == .External {
-		m := wlr.wlr_keyboard_modifiers{e.mask[0], e.mask[1], e.mask[2], e.mask[3]}
-		wlr.wlr_seat_set_keyboard(s.seat, kb.handle)
-		wlr.wlr_seat_keyboard_notify_modifiers(s.seat, &m)
+		m := st.Modifiers{e.mask[0], e.mask[1], e.mask[2], e.mask[3]}
+		st.set_keyboard(s.seat, &kb.keyboard)
+		st.keyboard_notify_modifiers(s.seat, &m)
 	}
 	return true
 }

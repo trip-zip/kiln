@@ -19,15 +19,8 @@ foreign surface_lib {
 	wlr_surface_send_enter :: proc(surface:^wlr_surface,output:^wlr_output) ---
 	wlr_surface_send_leave :: proc(surface:^wlr_surface,output:^wlr_output) ---
 }
-#assert(offset_of(wlr_surface_state,dx)==16 && offset_of(wlr_surface_state,dy)==20)
-#assert(offset_of(wlr_surface_state,transform)==120)
-#assert(offset_of(wlr_surface_state,subsurfaces_below)==160 && offset_of(wlr_surface_state,subsurfaces_above)==176)
-#assert(size_of(wlr_drag_icon)==64 && align_of(wlr_drag_icon)==8)
-#assert(offset_of(wlr_drag_icon,surface)==8 && offset_of(wlr_drag_icon,events)==16)
-#assert(offset_of(wlr_output,needs_frame)==185 && offset_of(wlr_output,swapchain)==456)
-#assert(offset_of(wlr_output_events,needs_frame)==32)
-#assert(offset_of(wlr_surface_events,destroy)==80)
-#assert(size_of(type_of(wlr_drag_icon{}.events))==16 && offset_of(type_of(wlr_drag_icon{}.events),destroy)==0)
+#assert(offset_of(wlr_surface_state,dx)==16 && offset_of(wlr_surface_state,dy)==20 && offset_of(wlr_surface_state,transform)==120 && offset_of(wlr_surface_state,subsurfaces_below)==160 && offset_of(wlr_surface_state,subsurfaces_above)==176)
+#assert(offset_of(wlr_output,needs_frame)==185 && offset_of(wlr_output,swapchain)==456 && offset_of(wlr_output_events,needs_frame)==32 && offset_of(wlr_surface_events,destroy)==80)
 
 // Only the current relationship is read; wlroots owns both state and lifetime.
 wlr_subsurface_parent_state :: struct {
@@ -42,9 +35,5 @@ wlr_subsurface :: struct {
 	current: wlr_subsurface_parent_state,
 	_opaque_56: [152]u8,
 }
-#assert(size_of(wlr_subsurface_parent_state)==32 && align_of(wlr_subsurface_parent_state)==8)
-#assert(offset_of(wlr_subsurface_parent_state,x)==0 && offset_of(wlr_subsurface_parent_state,y)==4)
-#assert(offset_of(wlr_subsurface_parent_state,link)==8)
-#assert(size_of(wlr_subsurface)==208 && align_of(wlr_subsurface)==8)
-#assert(offset_of(wlr_subsurface,surface)==8 && offset_of(wlr_subsurface,current)==24)
-#assert(offset_of(wlr_surface,input_region)==72)
+#assert(size_of(wlr_subsurface_parent_state)==32 && align_of(wlr_subsurface_parent_state)==8 && offset_of(wlr_subsurface_parent_state,x)==0 && offset_of(wlr_subsurface_parent_state,y)==4 && offset_of(wlr_subsurface_parent_state,link)==8)
+#assert(size_of(wlr_subsurface)==208 && align_of(wlr_subsurface)==8 && offset_of(wlr_subsurface,surface)==8 && offset_of(wlr_subsurface,current)==24 && offset_of(wlr_surface,input_region)==72)

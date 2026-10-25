@@ -1,5 +1,7 @@
 package extensions
 
+import st "../seat"
+
 import p "../protocols"
 import wl "../wayland"
 import wlr "../wlroots"
@@ -18,7 +20,7 @@ Activation :: struct {
 Activation_Token :: struct {
 	manager: ^Activation,
 	resource: ^wl.Resource,
-	seat: ^wlr.wlr_seat,
+	seat: ^st.Seat,
 	surface: ^wlr.wlr_surface,
 	app_id: cstring,
 	name: [33]u8,
@@ -102,8 +104,7 @@ activation_mint :: proc(m: ^Activation) -> (^Activation_Token, cstring) {
 	if !activation_issue(t) { activation_retire(t); return nil, nil }
 	return t, cstring(&t.name[0])
 }
-activation_seat_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+activation_seat_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	t := wl.owner(listener, Activation_Token, "seat_destroy")
 	wl.unlisten(listener)
 	t.seat, t.valid = nil, false
@@ -139,8 +140,8 @@ activation_token_request :: proc(r: ^wl.Resource, request: p.Xdg_Activation_Toke
 	case .commit:
 		t.valid = true
 		if t.seat != nil {
-			client := wlr.wlr_seat_client_for_wl_client(t.seat, r.client)
-			t.valid = client != nil && wlr.wlr_seat_client_validate_event_serial(client, t.serial)
+			client := st.client_for(t.seat, r.client)
+			t.valid = client != nil && st.valid_serial(client, t.serial)
 			if t.surface != nil && t.surface != t.seat.pointer_state.focused_surface && t.surface != t.seat.keyboard_state.focused_surface { t.valid = false }
 		}
 		if !activation_issue(t) { wl.client_no_memory(r.client); return }

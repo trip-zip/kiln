@@ -1,5 +1,7 @@
 package shells
 
+import st "../seat"
+
 import wl "../wayland"
 import wlr "../wlroots"
 import "base:runtime"
@@ -30,7 +32,7 @@ map_surface :: wlr_surface_map
 unmap_surface :: wlr_surface_unmap
 has_pending_buffer :: proc(s: ^wlr.Surface) -> bool { return s.pending.buffer_width > 0 && s.pending.buffer_height > 0 }
 
-Surface_Object :: union { ^Xdg_Surface, ^Layer_Surface, ^Lock_Surface }
+Surface_Object :: union { ^Xdg_Surface, ^Layer_Surface, ^Lock_Surface, ^st.Drag_Icon }
 roles: map[^wlr.Surface]Surface_Object
 xdg_role := Surface_Role{name = "xdg_surface", client_commit = role_client_commit, commit = role_commit,
 	map_ = role_map, unmap = role_unmap, destroy = role_destroy}
@@ -38,13 +40,21 @@ layer_role := Surface_Role{name = "zwlr_layer_surface_v1", client_commit = role_
 	unmap = role_unmap, destroy = role_destroy}
 lock_role := Surface_Role{name = "ext_session_lock_surface_v1", client_commit = role_client_commit, commit = role_commit,
 	unmap = role_unmap, destroy = role_destroy}
+drag_icon_role := Surface_Role{name="wl_data_device.icon", no_object=true, commit=role_commit}
+@(init)
+install_drag_role :: proc "contextless"() { st.drag_icon_assign = drag_role_assign; st.drag_icon_forget = drag_role_forget }
+drag_role_assign :: proc(i: ^st.Drag_Icon, r: ^wl.Resource) -> bool {
+	if roles[i.surface] != nil { wl.post_error(r, 0, "surface already has an active role"); return false }
+	if !role_assign(i, r) { return false }; st.icon_surface_commit(i.surface); return true
+}
+drag_role_forget :: proc(i: ^st.Drag_Icon) { wlr_surface_unmap(i.surface); role_forget(i) }
 role_assign :: proc(object: $T, error_resource: ^wl.Resource, error_code: u32 = 0) -> bool {
 	role: ^Surface_Role
-	when T == ^Xdg_Surface { role = &xdg_role } else when T == ^Layer_Surface { role = &layer_role } else when T == ^Lock_Surface { role = &lock_role }
+	when T == ^Xdg_Surface { role = &xdg_role } else when T == ^Layer_Surface { role = &layer_role } else when T == ^Lock_Surface { role = &lock_role } else when T == ^st.Drag_Icon { role = &drag_icon_role }
 	if !wlr_surface_set_role(object.surface, role, error_resource, error_code) { return false }
 	if roles == nil { roles = make(map[^wlr.Surface]Surface_Object) }
 	roles[object.surface] = object
-	wlr_surface_set_role_object(object.surface, object.resource)
+	when T != ^st.Drag_Icon { wlr_surface_set_role_object(object.surface, object.resource) }
 	return true
 }
 role_client_commit :: proc "c" (surface: ^wlr.Surface) {
@@ -53,6 +63,7 @@ role_client_commit :: proc "c" (surface: ^wlr.Surface) {
 	case ^Xdg_Surface: context = object.resource.client.display.loop.ctx; xdg_validate(object)
 	case ^Layer_Surface: context = object.resource.client.display.loop.ctx; layer_validate(object)
 	case ^Lock_Surface: context = object.resource.client.display.loop.ctx; lock_surface_validate(object)
+	case ^st.Drag_Icon:
 	}
 }
 role_commit :: proc "c" (surface: ^wlr.Surface) {
@@ -61,6 +72,7 @@ role_commit :: proc "c" (surface: ^wlr.Surface) {
 	case ^Xdg_Surface: context = object.resource.client.display.loop.ctx; xdg_commit(object)
 	case ^Layer_Surface: context = object.resource.client.display.loop.ctx; layer_commit(object)
 	case ^Lock_Surface: context = object.resource.client.display.loop.ctx; lock_surface_commit(object)
+	case ^st.Drag_Icon: context = surface.resource.client.display.loop.ctx; st.icon_surface_commit(surface)
 	}
 }
 role_map :: proc "c" (surface: ^wlr.Surface) {
@@ -73,6 +85,7 @@ role_unmap :: proc "c" (surface: ^wlr.Surface) {
 	case ^Xdg_Surface: context = object.resource.client.display.loop.ctx; xdg_reset(object); object.unmapping = true
 	case ^Layer_Surface: context = object.resource.client.display.loop.ctx; layer_reset(object); object.unmapping = true
 	case ^Lock_Surface: context = object.resource.client.display.loop.ctx; object.unmapping = true
+	case ^st.Drag_Icon:
 	}
 }
 role_destroy :: proc "c" (surface: ^wlr.Surface) {
@@ -81,6 +94,7 @@ role_destroy :: proc "c" (surface: ^wlr.Surface) {
 	case ^Xdg_Surface: context = object.resource.client.display.loop.ctx; xdg_retire(object)
 	case ^Layer_Surface: context = object.resource.client.display.loop.ctx; layer_retire(object)
 	case ^Lock_Surface: context = object.resource.client.display.loop.ctx; lock_surface_retire(object)
+	case ^st.Drag_Icon:
 	}
 }
 role_forget :: proc(object: $T) {
@@ -112,14 +126,14 @@ surface_extents :: proc(s: ^wlr.Surface, x := i32(0), y := i32(0)) -> wlr.Box {
 	return box
 }
 
-seat_client_of :: wlr.wlr_seat_client_from_resource
-valid_grab_serial :: wlr.wlr_seat_client_validate_event_serial
+seat_client_of :: st.client_of
+valid_grab_serial :: st.valid_serial
 
 popup_list :: proc(surface: ^wlr.Surface) -> ^[dynamic]^Popup {
 	switch object in roles[surface] {
 	case ^Xdg_Surface: return &object.popups
 	case ^Layer_Surface: return &object.popups
-	case ^Lock_Surface:
+	case ^Lock_Surface, ^st.Drag_Icon:
 	}
 	return nil
 }

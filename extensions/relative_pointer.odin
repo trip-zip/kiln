@@ -1,9 +1,9 @@
 package extensions
 
+import st "../seat"
+
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
-import "base:runtime"
 import "core:math"
 
 Relative_Manager :: struct {
@@ -14,7 +14,7 @@ Relative_Manager :: struct {
 Relative_Pointer :: struct {
 	manager: ^Relative_Manager,
 	resource, pointer: ^wl.Resource,
-	seat: ^wlr.wlr_seat,
+	seat: ^st.Seat,
 	seat_destroy, pointer_destroy: wl.Listener,
 }
 relative_create :: proc(display: ^wl.Display) -> ^Relative_Manager {
@@ -24,10 +24,8 @@ relative_create :: proc(display: ^wl.Display) -> ^Relative_Manager {
 	wl.listen(&display.destroy_signal, &m.destroy, relative_destroyed)
 	return m
 }
-relative_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+relative_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	m := wl.owner(listener, Relative_Manager, "destroy")
-	context = m.global.display.loop.ctx
 	for len(m.pointers) > 0 { wl.resource_destroy(m.pointers[len(m.pointers)-1].resource) }
 	wl.unlisten(listener)
 	wl.global_destroy(m.global)
@@ -39,12 +37,10 @@ relative_release :: proc(r: ^Relative_Pointer) {
 	wl.unlisten(&r.pointer_destroy)
 	r.seat, r.pointer = nil, nil
 }
-relative_seat_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+relative_seat_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	relative_release(wl.owner(listener, Relative_Pointer, "seat_destroy"))
 }
-relative_pointer_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+relative_pointer_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	relative_release(wl.owner(listener, Relative_Pointer, "pointer_destroy"))
 }
 relative_resource_destroy :: proc(resource: ^wl.Resource) {
@@ -73,7 +69,7 @@ relative_request :: proc(resource: ^wl.Resource, request: p.Zwp_Relative_Pointer
 		wl.listen(&r.pointer.destroy_signal, &r.pointer_destroy, relative_pointer_destroyed)
 	}
 }
-relative_motion :: proc(m: ^Relative_Manager, seat: ^wlr.wlr_seat, time_msec: u32, dx, dy, ux, uy: f64) {
+relative_motion :: proc(m: ^Relative_Manager, seat: ^st.Seat, time_msec: u32, dx, dy, ux, uy: f64) {
 	if m == nil || seat == nil || seat.pointer_state.focused_client == nil { return }
 	stamp := u64(time_msec)*1000
 	for r in m.pointers {

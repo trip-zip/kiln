@@ -1,9 +1,11 @@
 package compositor
 
+import st "../seat"
+
 import sh "../shells"
 import sp "../scene_paint"
 
-import "../keymap"
+import keys "../keymap"
 import vm "../lua_runtime"
 import pam "../pam"
 import wl "../wayland"
@@ -14,15 +16,15 @@ Keyboard :: struct {
 	server:                  ^Server,
 	id:                      u64,
 	consumed:                map[u32]bool,
-	handle:                  ^wlr.wlr_keyboard,
-	compose:                 ^keymap.Compose,
-	key, modifiers, destroy: wl.Listener,
+	using keyboard:          st.Keyboard,
+	compose:                 ^keys.Compose,
+	key_event, modifiers_event, destroy_event: wl.Listener,
 }
 
 update_capabilities :: proc(s: ^Server) {
 	capabilities: u32 = 1 // Keep pointer requests available before a device is attached.
 	if len(s.keyboards) > 0 {capabilities |= 2}
-	wlr.wlr_seat_set_capabilities(s.seat, capabilities)
+	st.set_capabilities(s.seat, capabilities)
 }
 
 input_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
@@ -31,47 +33,53 @@ input_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	device := (^wlr.wlr_input_device)(data)
 	switch device.type {
 	case wlr.WLR_INPUT_DEVICE_KEYBOARD:
-		km, ok := keymap.create_default()
+		km, ok := keys.create_default()
 		if !ok {
 			fail(s, "Failed to create keyboard map")
 			return
 		}
-		defer keymap.destroy(km)
+		defer keys.destroy(km)
 		handle := wlr.wlr_keyboard_from_input_device(device)
-		if !wlr.wlr_keyboard_set_keymap(handle, km) {
+		kb := new(Keyboard)
+		st.keyboard_init(&kb.keyboard, handle)
+		if !st.keyboard_set_keymap(&kb.keyboard, km) {
+			st.keyboard_finish(&kb.keyboard); free(kb)
 			fail(s, "Failed to set keyboard map")
 			return
 		}
-		wlr.wlr_keyboard_set_repeat_info(handle, 25, 600)
-		kb := new(Keyboard)
+		st.keyboard_set_repeat_info(&kb.keyboard, 25, 600)
 		kb.server, kb.handle = s, handle
 		s.next_keyboard += 1
 		kb.id = s.next_keyboard
-		kb.compose = keymap.compose_default()
+		kb.compose = keys.compose_default()
 		kb.consumed = make(map[u32]bool)
 		append(&s.keyboards, kb)
-		wl.listen(&handle.events.key, &kb.key, keyboard_key)
-		wl.listen(&handle.events.modifiers, &kb.modifiers, keyboard_modifiers)
-		wl.listen(&handle.base.events.destroy, &kb.destroy, keyboard_destroy)
-		wlr.wlr_seat_set_keyboard(s.seat, handle)
+		wl.listen(&kb.events.key, &kb.key_event, keyboard_key)
+		wl.listen(&kb.events.modifiers, &kb.modifiers_event, keyboard_modifiers)
+		wl.listen(&kb.events.destroy, &kb.destroy_event, keyboard_destroy)
+		st.set_keyboard(s.seat, &kb.keyboard)
 		update_capabilities(s)
 		runtime_focus(s, s.requested_focus)
 	case wlr.WLR_INPUT_DEVICE_POINTER:
-		wlr.wlr_cursor_attach_input_device(s.cursor, device)
+		handle := wlr.wlr_pointer_from_input_device(device)
 		p := new(Pointer)
 		p.server, p.device = s, device
 		s.next_pointer += 1
 		p.id = s.next_pointer
 		append(&s.pointers, p)
 		wl.listen(&device.events.destroy, &p.destroy, pointer_destroy)
+		wl.listen(&handle.events.motion, &p.motion, cursor_motion)
+		wl.listen(&handle.events.motion_absolute, &p.absolute, cursor_absolute)
+		wl.listen(&handle.events.button, &p.button, cursor_button)
+		wl.listen(&handle.events.axis, &p.axis, cursor_axis)
+		wl.listen(&handle.events.frame, &p.frame, cursor_frame)
 		map_pointers(s)
 		cursor_sync(s)
 	}
 }
 
-keyboard_key :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
-	kb := wl.owner(listener, Keyboard, "key")
+keyboard_key :: proc (listener: ^wl.Listener, data: rawptr) {
+	kb := wl.owner(listener, Keyboard, "key_event")
 	// Backend teardown releases held keys after Lua has been destroyed.
 	if kb.server.shutting_down {return}
 	idle_activity(kb.server)
@@ -89,31 +97,31 @@ keyboard_key :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 		)
 		return
 	}
-	mods := wlr.wlr_keyboard_get_modifiers(kb.handle)
-	syms := keymap.symbols(kb.handle.xkb_state, event.keycode)
+	mods := keys.modifier_mask(kb.state)
+	syms := keys.symbols(kb.state, event.keycode)
 	if native_vt(kb.server, syms, mods, event.state == 1) {
 		kb.consumed[event.keycode] = true
 		return
 	}
-	chords := keymap.chord_symbols(kb.handle.xkb_state, event.keycode, mods)
+	chords := keys.chord_symbols(kb.state, event.keycode, mods)
 	matched := false
 	for actual, i in syms {
 		sym := actual
 		if i < len(chords) {sym = chords[i]}
-		matched = matched || keymap.bound(kb.server.lua.bindings, sym, mods)
+		matched = matched || keys.bound(kb.server.lua.bindings, sym, mods)
 	}
 	for actual, i in syms {
 		sym := actual
 		if i < len(chords) {sym = chords[i]}
 		name_buf: [128]u8
 		utf8_buf: [256]u8
-		name, _ := keymap.describe(sym, name_buf[:], utf8_buf[:])
-		utf8 := keymap.text(
+		name, _ := keys.describe(sym, name_buf[:], utf8_buf[:])
+		utf8 := keys.text(
 			kb.compose,
 			actual,
 			event.state == 1,
 			utf8_buf[:],
-			kb.handle.xkb_state,
+			kb.state,
 			event.keycode,
 		)
 		fact := vm.Event {
@@ -154,11 +162,10 @@ keyboard_key :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	}
 }
 
-keyboard_modifiers :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
-	kb := wl.owner(listener, Keyboard, "modifiers")
+keyboard_modifiers :: proc (listener: ^wl.Listener, data: rawptr) {
+	kb := wl.owner(listener, Keyboard, "modifiers_event")
 	if kb.server.shutting_down {return}
-	m := kb.handle.modifiers
+	m := kb.modifiers
 	queue_event(
 		kb.server,
 		vm.Event {
@@ -170,23 +177,22 @@ keyboard_modifiers :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	)
 }
 
-keyboard_destroy :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
-	kb := wl.owner(listener, Keyboard, "destroy")
+keyboard_destroy :: proc (listener: ^wl.Listener, data: rawptr) {
+	kb := wl.owner(listener, Keyboard, "destroy_event")
 	s := kb.server
-	wl.unlisten(&kb.key)
-	wl.unlisten(&kb.modifiers)
-	wl.unlisten(&kb.destroy)
+	wl.unlisten(&kb.key_event)
+	wl.unlisten(&kb.modifiers_event)
+	wl.unlisten(&kb.destroy_event)
 	for other, i in s.keyboards {
 		if other == kb {
 			ordered_remove(&s.keyboards, i)
 			break
 		}
 	}
-	if len(s.keyboards) > 0 {wlr.wlr_seat_set_keyboard(s.seat, s.keyboards[0].handle)}
+	if len(s.keyboards) > 0 {st.set_keyboard(s.seat, &s.keyboards[0].keyboard)}
 	update_capabilities(s)
 	delete(kb.consumed)
-	keymap.compose_destroy(kb.compose)
+	keys.compose_destroy(kb.compose)
 	free(kb)
 }
 
@@ -222,7 +228,7 @@ pointer_motion :: proc(s: ^Server, time_msec: u32) {
 		},
 	)
 	if !s.pointer_grabbed {
-		surface, view, _, _ := hit_test(s, s.cursor.x, s.cursor.y)
+		surface, view, _, _ := hit_test(s, s.cursor_x, s.cursor_y)
 		if !popup_pointer_allowed(s, surface) {surface, view = nil, nil}
 		handle: u32
 		if surface != nil && view != nil {handle = view.id}
@@ -245,7 +251,7 @@ pointer_refresh_at :: proc(
 	if !popup_pointer_allowed(s, surface) {surface, view = nil, nil}
 	// Finish motion for the old focus before leave. Relative-only events can
 	// otherwise stay pending in XWayland and move its cursor on the next enter.
-	if s.seat.pointer_state.focused_surface != surface {wlr.wlr_seat_pointer_notify_frame(s.seat)}
+	if s.seat.pointer_state.focused_surface != surface {st.pointer_notify_frame(s.seat)}
 	handle: u32
 	if view != nil && surface != nil {handle = view.id}
 	if handle != s.pointer_client {
@@ -254,22 +260,22 @@ pointer_refresh_at :: proc(
 	}
 	if surface == nil {
 		if reset_cursor {runtime_cursor(s, "default")}
-		wlr.wlr_seat_pointer_notify_clear_focus(s.seat)
+		st.pointer_notify_clear_focus(s.seat)
 	} else {
-		wlr.wlr_seat_pointer_notify_enter(s.seat, surface, sx, sy)
-		if send_motion {wlr.wlr_seat_pointer_notify_motion(s.seat, time_msec, sx, sy)} else if s.seat.pointer_state.focused_surface == surface &&
+		st.pointer_notify_enter(s.seat, surface, sx, sy)
+		if send_motion {st.pointer_notify_motion(s.seat, time_msec, sx, sy)} else if s.seat.pointer_state.focused_surface == surface &&
 		   (s.seat.pointer_state.sx != sx || s.seat.pointer_state.sy != sy) {
 			// A published move changes client-local coordinates too. Updating only
 			// the seat cache would suppress the next real motion as a duplicate.
-			wlr.wlr_seat_pointer_notify_motion(s.seat, time_msec, sx, sy)
-			wlr.wlr_seat_pointer_notify_frame(s.seat)
+			st.pointer_notify_motion(s.seat, time_msec, sx, sy)
+			st.pointer_notify_frame(s.seat)
 		}
 	}
 }
 
 cursor_motion :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
-	s := wl.owner(listener, Server, "cursor_motion")
+	s := wl.owner(listener, Pointer, "motion").server
 	idle_activity(s)
 	if locked(s) {return}
 	event := (^wlr.wlr_pointer_motion_event)(data)
@@ -279,6 +285,7 @@ cursor_motion :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 			native = .DeviceMotion,
 			time = event.time_msec,
 			pointer_device = pointer_id(s, &event.pointer.base),
+			motion_output = pointer_output(s, event.pointer),
 			dx = event.delta_x,
 			dy = event.delta_y,
 			ux = event.unaccel_dx,
@@ -289,7 +296,7 @@ cursor_motion :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 
 cursor_absolute :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
-	s := wl.owner(listener, Server, "cursor_absolute")
+	s := wl.owner(listener, Pointer, "absolute").server
 	idle_activity(s)
 	if locked(s) {return}
 	event := (^wlr.wlr_pointer_motion_absolute_event)(data)
@@ -310,7 +317,7 @@ cursor_absolute :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 
 cursor_button :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
-	s := wl.owner(listener, Server, "cursor_button")
+	s := wl.owner(listener, Pointer, "button").server
 	idle_activity(s)
 	event := (^wlr.wlr_pointer_button_event)(data)
 	if locked(s) {
@@ -343,7 +350,7 @@ cursor_button :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 
 cursor_axis :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
-	s := wl.owner(listener, Server, "cursor_axis")
+	s := wl.owner(listener, Pointer, "axis").server
 	idle_activity(s)
 	if locked(s) {return}
 	event := (^wlr.wlr_pointer_axis_event)(data)
@@ -365,17 +372,16 @@ cursor_axis :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 
 cursor_frame :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
-	s := wl.owner(listener, Server, "cursor_frame")
+	s := wl.owner(listener, Pointer, "frame").server
 	queue_event(
 		s,
 		vm.Event{native = .Frame, blocked = s.pointer_grabbed, claimed = s.pointer_grabbed},
 	)
 }
 
-request_cursor :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+request_cursor :: proc (listener: ^wl.Listener, data: rawptr) {
 	s := wl.owner(listener, Server, "request_cursor")
-	event := (^wlr.wlr_seat_pointer_request_set_cursor_event)(data)
+	event := (^st.Cursor_Event)(data)
 	if !locked(s) && !s.pointer_grabbed &&
 	   event.seat_client == s.seat.pointer_state.focused_client {
 		s.cursor_named = false
@@ -383,28 +389,13 @@ request_cursor :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	}
 }
 
-request_selection :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
-	s := wl.owner(listener, Server, "request_selection")
-	event := (^wlr.wlr_seat_request_set_selection_event)(data)
-	wlr.wlr_seat_set_selection(s.seat, event.source, event.serial)
-}
-
 init_input :: proc(s: ^Server) -> bool {
 	s.buttons = make(map[u32]bool)
-	s.seat = wlr.wlr_seat_create(s.display, "seat0")
+	s.seat = st.create(s.display, "seat0")
 	if s.seat == nil {return false}
-	s.cursor = wlr.wlr_cursor_create()
-	if s.cursor == nil {return false}
-	s.cursor_manager = wlr.wlr_xcursor_manager_create(nil, 24)
+	s.cursor_manager = st.xcursor_manager_create(nil, 24)
 	if s.cursor_manager == nil {return false}
-	wl.listen(&s.cursor.events.motion, &s.cursor_motion, cursor_motion)
-	wl.listen(&s.cursor.events.motion_absolute, &s.cursor_absolute, cursor_absolute)
-	wl.listen(&s.cursor.events.button, &s.cursor_button, cursor_button)
-	wl.listen(&s.cursor.events.axis, &s.cursor_axis, cursor_axis)
-	wl.listen(&s.cursor.events.frame, &s.cursor_frame, cursor_frame)
 	wl.listen(&s.seat.events.request_set_cursor, &s.request_cursor, request_cursor)
-	wl.listen(&s.seat.events.request_set_selection, &s.request_selection, request_selection)
 	wl.listen(&s.backend.events.new_input, &s.new_input, input_added)
 	update_capabilities(s)
 	return true
@@ -418,7 +409,7 @@ queue_pointer :: proc(s: ^Server, fact: vm.Event) {
 
 pointer_fact :: proc(s: ^Server, e: ^vm.Event) {
 	e.class = "input"
-	e.px, e.py = s.cursor.x, s.cursor.y
+	e.px, e.py = s.cursor_x, s.cursor_y
 	e.has_output = false
 	e.output = ""
 	e.handle = 0
@@ -430,16 +421,16 @@ pointer_fact :: proc(s: ^Server, e: ^vm.Event) {
 	if !popup_pointer_allowed(s, surface) {surface, view = nil, nil}
 	e.native_surface = surface != nil
 	if surface != nil && view != nil {e.handle = view.id}
-	if kb := wlr.wlr_seat_get_keyboard(s.seat); kb != nil {e.mods = wlr.wlr_keyboard_get_modifiers(kb)}
+	if kb := st.get_keyboard(s.seat); kb != nil {e.mods = keys.modifier_mask(kb.state)}
 }
 
 pointer_refresh :: proc(s: ^Server, time_msec: u32) {
-	pointer_refresh_at(s, time_msec, s.cursor.x, s.cursor.y)
+	pointer_refresh_at(s, time_msec, s.cursor_x, s.cursor_y)
 }
 
 pointer_target_refresh :: proc(s: ^Server) {
-	if s == nil || s.cursor == nil || s.seat == nil || s.shutting_down {return}
-	pointer_refresh_at(s, 0, s.cursor.x, s.cursor.y, false, false)
+	if s == nil || s.layout == nil || s.seat == nil || s.shutting_down {return}
+	pointer_refresh_at(s, 0, s.cursor_x, s.cursor_y, false, false)
 }
 
 pointer_id :: proc(s: ^Server, device: ^wlr.wlr_input_device) -> u64 {
@@ -505,7 +496,7 @@ popup_grab_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 		s.popup_previous, s.popup_grab_active = nil, false
 		if !locked(s) && !s.shutting_down {
 			if previous !=
-			   nil {enter_surface(s, previous)} else {wlr.wlr_seat_keyboard_notify_clear_focus(s.seat)}
+			   nil {enter_surface(s, previous)} else {st.keyboard_notify_clear_focus(s.seat)}
 		}
 	}
 	pointer_target_refresh(s)
