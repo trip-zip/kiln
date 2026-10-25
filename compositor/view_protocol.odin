@@ -1,5 +1,7 @@
 package compositor
 
+import xw "../xwayland"
+
 import sh "../shells"
 import "core:strings"
 
@@ -14,12 +16,12 @@ view_surface :: proc(v: ^View) -> ^wlr.wlr_surface {
 }
 view_title_text :: proc(v: ^View) -> cstring {
     if t:=xdg(v);t!=nil { return strings.clone_to_cstring(t.title, context.temp_allocator) if t.title != "" else nil }
-    if x:=x11(v);x!=nil { return x.handle.title }
+    if x:=x11(v);x!=nil { return strings.clone_to_cstring(x.handle.title, context.temp_allocator) if x.handle.title != "" else nil }
     return nil
 }
 view_app_text :: proc(v: ^View) -> cstring {
     if t:=xdg(v);t!=nil { return strings.clone_to_cstring(t.app_id, context.temp_allocator) if t.app_id != "" else nil }
-    if x:=x11(v);x!=nil { return x.handle.class }
+    if x:=x11(v);x!=nil { return strings.clone_to_cstring(x.handle.class, context.temp_allocator) if x.handle.class != "" else nil }
     return nil
 }
 view_override_redirect :: proc(v: ^View) -> bool {
@@ -50,17 +52,17 @@ view_states :: proc(v: ^View, replay: bool) -> (full,maxed,minimized: bool) {
 }
 view_activate :: proc(v: ^View, on: bool) {
     if t:=xdg(v);t!=nil { sh.set_activated(t,on) }
-    else if x:=x11(v);x!=nil { wlr.xwayland_activate(x.handle,on) }
+    else if x:=x11(v);x!=nil { xw.activate(x.handle,on) }
 }
 view_close :: proc(v: ^View) {
     if t:=xdg(v);t!=nil { sh.send_close(t) }
-    else if x:=x11(v);x!=nil { wlr.xwayland_close(x.handle) }
+    else if x:=x11(v);x!=nil { xw.close(x.handle) }
 }
 view_fullscreen_hint :: proc(v: ^View, on: bool) {
     if t:=xdg(v);t!=nil { sh.set_fullscreen(t,on) }
-    else if x:=x11(v);x!=nil { x.granted_fullscreen=on;wlr.xwayland_fullscreen(x.handle,on) }
+    else if x:=x11(v);x!=nil { x.granted_fullscreen=on;xw.set_fullscreen(x.handle,on) }
 }
 view_maximize_hint :: proc(v: ^View, on: bool) {
     if t:=xdg(v);t!=nil { sh.set_maximized(t,on) }
-    else if x:=x11(v);x!=nil { x.granted_maximized=on;wlr.xwayland_maximize(x.handle,on) }
+    else if x:=x11(v);x!=nil { x.granted_maximized=on;xw.set_maximized(x.handle,on) }
 }

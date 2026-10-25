@@ -1,5 +1,7 @@
 package compositor
 
+import xw "../xwayland"
+
 import sh "../shells"
 
 import ext "../extensions"
@@ -166,7 +168,7 @@ runtime_kill :: proc(data: rawptr, handle: u32) {
 		if view.id != handle {continue}
 		if x := x11(view); x != nil {
 			if !xcb.kill_client(
-				wlr.xwayland_connection(view.server.xwayland),
+				xw.connection(view.server.xwayland),
 				x.handle.window_id,
 			) {fmt.eprintln("X11 kill failed: no live XWM connection")}
 			return
@@ -219,7 +221,7 @@ runtime_request_reload :: proc(data: rawptr) {
 runtime_minimize :: proc(data: rawptr, handle: u32, on: bool) {
 	for v in (^Server)(data).views {if v.id == handle && v.mapped {ext.foreign_minimized(v.foreign_handle, on)
 			if x := x11(v); x != nil {x.granted_minimized = on
-				wlr.xwayland_minimize(x.handle, on)}
+				xw.set_minimized(x.handle, on)}
 			return}}
 }
 
@@ -231,7 +233,7 @@ runtime_client_configure :: proc(data: rawptr, handle: u32, width, height: i32) 
 		} else if x := x11(v); x != nil && !view_override_redirect(v) {
 			px, py: i32
 			view_position(v, &px, &py)
-			if !wlr.xwayland_configure(x.handle, px, py, width, height) {
+			if !x11_configure_window(x.handle, px, py, width, height) {
 				fmt.eprintln(
 					"X11 requested geometry exceeds protocol limits; retaining last X geometry",
 				)

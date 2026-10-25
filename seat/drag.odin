@@ -13,11 +13,13 @@ Drag :: struct {
 	origin, focus: ^wlr.Surface,
 	icon: ^Drag_Icon,
 	serial, button: u32,
+	external_accepted: bool,
 	offers: [dynamic]^Offer,
 	devices: [dynamic]^Device,
-	events: struct { destroy: wl.Signal },
+	events: struct { focus, motion, drop, destroy: wl.Signal },
 	client_destroy, origin_destroy, focus_destroy: wl.Listener,
 }
+Drag_Motion :: struct { time: u32, sx, sy: f64 }
 Drag_Event :: struct { drag: ^Drag, origin: ^wlr.Surface, serial: u32 }
 drag_icon_assign: proc(^Drag_Icon, ^wl.Resource) -> bool
 drag_icon_forget: proc(^Drag_Icon)
@@ -29,7 +31,7 @@ drag_request :: proc(d: ^Device, source: ^Source, origin, icon: ^wlr.Surface, se
 	if s.drag != nil || origin == nil || state.focused_client != c || state.focused_surface != origin || len(state.buttons) != 1 || state.grab_serial != serial { return }
 	drag := new(Drag)
 	drag.seat, drag.client, drag.source, drag.origin, drag.serial, drag.button = s, c, source, origin, serial, state.grab_button
-	wl.signal_init(&drag.events.destroy)
+	for signal in ([]^wl.Signal{&drag.events.focus, &drag.events.motion, &drag.events.drop, &drag.events.destroy}) { wl.signal_init(signal) }
 	if icon != nil {
 		i := new(Drag_Icon); i.surface, i.drag = icon, drag; wl.signal_init(&i.events.destroy)
 		if drag_icon_assign == nil || !drag_icon_assign(i, d.resource) { free(i); free(drag); return }
@@ -75,11 +77,12 @@ drag_leave :: proc(d: ^Drag, dropped := false) {
 	for device in d.devices { wl.post(device.resource, u32(p.Wl_Data_Device_Event.leave)) }
 	for o in d.offers { if !dropped { offer_detach(o) }; o.device = nil }
 	clear(&d.devices); clear(&d.offers)
-	wl.unlisten(&d.focus_destroy); d.focus = nil
+	wl.unlisten(&d.focus_destroy); d.focus = nil; d.external_accepted = false
 }
 drag_enter :: proc(d: ^Drag, surface: ^wlr.Surface, sx, sy: f64) {
 	if d.focus == surface { return }
 	drag_leave(d)
+	defer wl.signal_emit_mutable(&d.events.focus, d)
 	if surface == nil || (d.source == nil && surface_resource(surface).client != d.client.client) { return }
 	d.focus = surface
 	surface_watch(surface, &d.focus_destroy, drag_focus_destroy)
@@ -95,6 +98,7 @@ drag_enter :: proc(d: ^Drag, surface: ^wlr.Surface, sx, sy: f64) {
 	}
 }
 drag_motion :: proc(d: ^Drag, time: u32, sx, sy: f64) {
+	e := Drag_Motion{time, sx, sy}; wl.signal_emit_mutable(&d.events.motion, &e)
 	for device in d.devices { wl.post(device.resource, u32(p.Wl_Data_Device_Event.motion), wl.Uint(time), fixed(sx), fixed(sy)) }
 }
 drag_offer_remove :: proc(d: ^Drag, o: ^Offer) { for other, i in d.offers { if other == o { ordered_remove(&d.offers, i); break } } }
@@ -103,12 +107,13 @@ drag_device_remove :: proc(d: ^Drag, device: ^Device) {
 	for other, i in d.devices { if other == device { ordered_remove(&d.devices, i); break } }
 }
 drag_drop :: proc(d: ^Drag) {
-	accepted := d.source == nil && len(d.devices) > 0
+	accepted := d.external_accepted || d.source == nil && len(d.devices) > 0
 	for o in d.offers { if o.source != nil && o.accepted && o.action != 0 { accepted = true } }
 	if accepted {
+		wl.signal_emit_mutable(&d.events.drop, d)
 		for device in d.devices { wl.post(device.resource, u32(p.Wl_Data_Device_Event.drop)) }
 		for o in d.offers { o.dropped = true }
-		if d.source != nil && d.source.resource.version >= 3 { wl.post(d.source.resource, u32(p.Wl_Data_Source_Event.dnd_drop_performed)) }
+		if d.source != nil && d.source.resource != nil && d.source.resource.version >= 3 { wl.post(d.source.resource, u32(p.Wl_Data_Source_Event.dnd_drop_performed)) }
 	}
 	drag_retire(d, !accepted)
 }

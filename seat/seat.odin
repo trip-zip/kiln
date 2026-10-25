@@ -16,7 +16,7 @@ Seat :: struct {
 	drag: ^Drag,
 	keyboard_state: Keyboard_State,
 	pointer_state: Pointer_State,
-	events: struct { request_set_selection, request_set_primary_selection, request_start_drag, start_drag, request_set_cursor, pointer_focus_change, keyboard_focus_change, destroy: wl.Signal },
+	events: struct { set_selection, set_primary_selection, request_set_selection, request_set_primary_selection, request_start_drag, start_drag, request_set_cursor, pointer_focus_change, keyboard_focus_change, destroy: wl.Signal },
 	destroy: wl.Listener,
 }
 Client :: struct {
@@ -35,7 +35,7 @@ Client :: struct {
 create :: proc(display: ^wl.Display, name: cstring) -> ^Seat {
 	s := new(Seat)
 	s.display, s.name = display, strings.clone(string(name))
-	for signal in ([]^wl.Signal{&s.events.request_set_cursor, &s.events.pointer_focus_change,
+	for signal in ([]^wl.Signal{&s.events.set_selection, &s.events.set_primary_selection, &s.events.request_set_cursor, &s.events.pointer_focus_change,
 		&s.events.keyboard_focus_change, &s.events.destroy, &s.events.request_set_selection, &s.events.request_set_primary_selection, &s.events.request_start_drag, &s.events.start_drag}) { wl.signal_init(signal) }
 	s.global = wl.global_create_typed(display, &p.wl_seat, 9, s, seat_request, seat_resource_destroy, seat_bind)
 	if s.global == nil { delete(s.name); free(s); return nil }

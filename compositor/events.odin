@@ -1,11 +1,13 @@
 package compositor
 
+import xw "../xwayland"
+
 import sp "../scene_paint"
 
 import vm "../lua_runtime"
 import pam "../pam"
 import wl "../wayland"
-import wlr "../wlroots"
+
 import "core:strings"
 
 free_event :: proc(event: ^vm.Event) {
@@ -94,14 +96,14 @@ queue_client :: proc(view: ^View, name: string, replay := false) {
 			e.window_type = types
 			e.pid = xs.pid
 			e.wm_class, e.wm_instance = string(xs.class), string(xs.instance)
-			e.has_wm_class, e.has_wm_instance = xs.class != nil, xs.instance != nil
+			e.has_wm_class, e.has_wm_instance = xs.has_class, xs.has_instance
 			if name == "map" {
 				e.x, e.y, e.width, e.height = i32(xs.x), i32(xs.y), i32(xs.width), i32(xs.height)
 				e.pid = xs.pid
 				if !replay &&
 				   x.initial_state {e.fullscreen, e.maximized, e.minimized = x.initial_fullscreen, x.initial_maximized, x.initial_minimized}
 				e.override_redirect = xs.override_redirect
-				e.wants_focus = xs.override_redirect && wlr.xwayland_wants_focus(xs)
+				e.wants_focus = xs.override_redirect && xw.wants_focus(xs)
 			}
 		}
 	}

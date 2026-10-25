@@ -9,6 +9,11 @@ Data_Manager :: struct { global: ^wl.Global, primary: bool, resources: [dynamic]
 Source :: struct {
 	manager: ^Data_Manager,
 	resource: ^wl.Resource,
+	primary: bool,
+	send: proc(^Source, string, wl.Fd),
+	cancel: proc(^Source),
+	data: rawptr,
+	events: struct { destroy: wl.Signal },
 	mimes: [dynamic]string,
 	offers: [dynamic]^Offer,
 	use: enum { Unused, Selection, Drag },
@@ -51,11 +56,30 @@ data_manager_request :: proc(r: ^wl.Resource, request: p.Wl_Data_Device_Manager_
 	}
 }
 source_create :: proc(m: ^Data_Manager, parent: ^wl.Resource, id: u32) {
-	s := new(Source); s.manager = m
+	s := source_new(m.primary); s.manager = m
 	if m.primary { s.resource = wl.resource_create_typed(parent.client, &p.zwp_primary_selection_source_v1, 1, id, s, primary_source_request, source_destroy) }
 	else { s.resource = wl.resource_create_typed(parent.client, &p.wl_data_source, parent.version, id, s, source_request, source_destroy) }
 	if s.resource == nil { free(s); return }
 	append(&m.resources, s.resource)
+}
+source_new :: proc(primary := false) -> ^Source {
+ s := new(Source); s.primary, s.send, s.cancel = primary, source_wire_send, source_wire_cancel
+ wl.signal_init(&s.events.destroy); return s
+}
+source_wire_send :: proc(s: ^Source, mime: string, fd: wl.Fd) {
+ if s.resource != nil { wl.post(s.resource, 0 if s.primary else u32(p.Wl_Data_Source_Event.send), wl.String{value=mime}, fd) }
+}
+source_wire_cancel :: proc(s: ^Source) { if s.resource != nil { wl.post(s.resource, 1 if s.primary else u32(p.Wl_Data_Source_Event.cancelled)) } }
+// The caller retains the descriptor; an asynchronous hook must duplicate it.
+source_send :: proc(s: ^Source, mime: string, fd: wl.Fd) { if s != nil && !s.cancelled && !s.finished && s.send != nil { s.send(s, mime, fd) } }
+source_action :: proc(s: ^Source, action: u32) {
+ if s == nil || s.action == action { return }; s.action = action
+ if s.resource != nil && s.resource.version >= 3 { wl.post(s.resource, u32(p.Wl_Data_Source_Event.action), wl.Uint(action)) }
+}
+source_finish :: proc(s: ^Source) {
+ if s == nil || s.finished || s.cancelled { return }; s.finished = true
+ if s.resource != nil && s.resource.version >= 3 { wl.post(s.resource, u32(p.Wl_Data_Source_Event.dnd_finished)) }
+ for len(s.offers) > 0 { offer_detach(s.offers[len(s.offers)-1]) }
 }
 source_of :: proc(r: ^wl.Resource) -> ^Source { return cast(^Source)r.data if r != nil else nil }
 source_offer :: proc(s: ^Source, mime: string) {
@@ -83,15 +107,16 @@ offer_detach :: proc(o: ^Offer) {
 source_cancel :: proc(s: ^Source) {
 	if s == nil || s.cancelled || s.finished { return }
 	s.cancelled = true
-	wl.post(s.resource, 1 if s.manager.primary else u32(p.Wl_Data_Source_Event.cancelled))
+	if s.cancel != nil { s.cancel(s) }
 	for len(s.offers) > 0 { offer_detach(s.offers[len(s.offers)-1]) }
 }
-source_destroy :: proc(r: ^wl.Resource) {
-	s := cast(^Source)r.data
+source_destroy :: proc(r: ^wl.Resource) { source_release(cast(^Source)r.data) }
+source_release :: proc(s: ^Source) {
+	wl.signal_emit_final(&s.events.destroy, s)
 	if s.drag != nil { drag_cancel(s.drag.seat) }
-	if s.seat != nil { selection_set(s.seat, nil, wl.next_serial(s.seat.display), s.manager.primary) }
+	if s.seat != nil { selection_set(s.seat, nil, wl.next_serial(s.seat.display), s.primary) }
 	for len(s.offers) > 0 { offer_detach(s.offers[len(s.offers)-1]) }
-	remove_resource(&s.manager.resources, r)
+	if s.manager != nil { remove_resource(&s.manager.resources, s.resource) }
 	for mime in s.mimes { delete(mime) }; delete(s.mimes); delete(s.offers); free(s)
 }
 device_create :: proc(m: ^Data_Manager, parent: ^wl.Resource, id: u32, c: ^Client) {
@@ -138,7 +163,7 @@ selection_request :: proc(d: ^Device, source: ^Source, serial: u32) {
 	if source != nil && (source.use != .Unused || source.cancelled || source.finished) {
 		if !d.manager.primary { wl.post_error(d.resource, u32(p.Wl_Data_Device_Error.used_source), "source was already used") }; return
 	}
-	if source != nil && source.actions_set { wl.post_error(source.resource, u32(p.Wl_Data_Source_Error.invalid_source), "drag source cannot be a selection"); return }
+	if source != nil && source.actions_set { if source.resource != nil { wl.post_error(source.resource, u32(p.Wl_Data_Source_Error.invalid_source), "drag source cannot be a selection") }; return }
 	c := d.client
 	if c == nil || !valid_serial(c, serial) { return }
 	s := c.seat
@@ -158,6 +183,7 @@ selection_set :: proc(s: ^Seat, source: ^Source, serial: u32, primary: bool) {
 	if primary { s.primary_selection_serial = serial } else { s.selection_serial = serial }
 	if source != nil { source.seat, source.use = s, .Selection }
 	for d in s.devices { if d.manager.primary == primary { device_selection(d) } }
+	wl.signal_emit_mutable(&s.events.set_primary_selection if primary else &s.events.set_selection, s)
 }
 selection_focus :: proc(s: ^Seat) { for d in s.devices { device_selection(d) } }
 device_selection :: proc(d: ^Device) {
@@ -188,7 +214,7 @@ offer_receive :: proc(o: ^Offer, mime: string, fd: wl.Fd) {
 	defer linux.close(linux.Fd(fd))
 	if o.source == nil || o.finished { return }
 	for offered in o.mimes { if offered == mime {
-		wl.post(o.source.resource, 0 if o.manager.primary else u32(p.Wl_Data_Source_Event.send), wl.String{value=mime}, fd)
+		source_send(o.source, mime, fd)
 		return
 	} }
 }
@@ -212,13 +238,13 @@ offer_action :: proc(o: ^Offer) {
 	if action == o.action { return }
 	o.action = action
 	if o.dropped { return }
-	if s.action != action { s.action = action; if s.resource.version >= 3 { wl.post(s.resource, u32(p.Wl_Data_Source_Event.action), wl.Uint(action)) } }
+	if s.action != action { s.action = action; if s.resource != nil && s.resource.version >= 3 { wl.post(s.resource, u32(p.Wl_Data_Source_Event.action), wl.Uint(action)) } }
 	if o.resource.version >= 3 { wl.post(o.resource, u32(p.Wl_Data_Offer_Event.action), wl.Uint(action)) }
 }
 offer_finish :: proc(o: ^Offer) {
 	s := o.source
 	if s == nil || s.finished { return }
-	if s.resource.version >= 3 {
+	if s.resource != nil && s.resource.version >= 3 {
 		if s.action != o.action { wl.post(s.resource, u32(p.Wl_Data_Source_Event.action), wl.Uint(o.action)) }
 		wl.post(s.resource, u32(p.Wl_Data_Source_Event.dnd_finished))
 	}
@@ -240,7 +266,7 @@ offer_request :: proc(r: ^wl.Resource, request: p.Wl_Data_Offer_Request, args: [
 		mime := args[1].(wl.String)
 		o.accepted = false
 		for offered in o.mimes { if !mime.is_null && mime.value == offered { o.accepted = true } }
-		wl.post(o.source.resource, u32(p.Wl_Data_Source_Event.target), wl.String{value=mime.value, is_null=!o.accepted})
+		if o.source.resource != nil { wl.post(o.source.resource, u32(p.Wl_Data_Source_Event.target), wl.String{value=mime.value, is_null=!o.accepted}) }
 	case .finish:
 		if !o.drag || !o.dropped || !o.accepted || o.action == 0 || o.action == 4 {
 			wl.post_error(r, u32(p.Wl_Data_Offer_Error.invalid_finish), "offer is not ready to finish"); return

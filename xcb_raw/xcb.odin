@@ -14,7 +14,7 @@ foreign lib {
 
 xcb_get_property_cookie_t :: struct { sequence: c.uint }
 xcb_intern_atom_cookie_t :: struct { sequence: c.uint }
-xcb_generic_error_t :: struct {}
+
 xcb_get_property_reply_t :: struct {
     response_type, format: u8,
     sequence: u16,

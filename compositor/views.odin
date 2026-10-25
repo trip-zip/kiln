@@ -147,8 +147,7 @@ record_size :: proc(view: ^View) {
 	}
 }
 
-view_destroy :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+view_destroy :: proc(listener: ^wl.Listener, data: rawptr) {
 	view := wl.owner(listener, View, "destroy")
 	context.allocator = view.allocator
 	if view.mapped {view_unmap(&view.unmap, nil)}
@@ -191,14 +190,12 @@ reply_state :: proc(view: ^View) {
 		sh.schedule_configure(xdg(view))
 	}
 }
-view_maximize :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+view_maximize :: proc(listener: ^wl.Listener, data: rawptr) {
 	view := wl.owner(listener, View, "maximize")
 	queue_client(view, "request::maximize")
 	reply_state(view)
 }
-view_fullscreen :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+view_fullscreen :: proc(listener: ^wl.Listener, data: rawptr) {
 	view := wl.owner(listener, View, "fullscreen")
 	queue_client(view, "request::fullscreen")
 	reply_state(view)
@@ -221,14 +218,12 @@ view_minimize :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	queue_client(wl.owner(listener, View, "minimize"), "request::minimize")
 }
-view_title :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+view_title :: proc(listener: ^wl.Listener, data: rawptr) {
 	v := wl.owner(listener, View, "title")
 	foreign_identity(v)
 	queue_client(v, "metadata")
 }
-view_app_id :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+view_app_id :: proc(listener: ^wl.Listener, data: rawptr) {
 	v := wl.owner(listener, View, "app_id")
 	foreign_identity(v)
 	queue_client(v, "metadata")

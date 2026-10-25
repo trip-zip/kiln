@@ -1,5 +1,7 @@
 package compositor
 
+import xw "../xwayland"
+
 import sh "../shells"
 
 import ext "../extensions"
@@ -12,14 +14,13 @@ import wl "../wayland"
 import wlr "../wlroots"
 import xcb "../xcb"
 import ewmh "../xcb_ewmh"
-import icccm "../xcb_icccm"
-import "base:runtime"
+
 import "core:fmt"
 import "core:strings"
 
 X11_View :: struct {
 	view:                                                                                  ^View,
-	handle:                                                                                ^wlr.wlr_xwayland_surface,
+	handle:                                                                                ^xw.Window,
 	surface:                                                                               ^wlr.wlr_surface,
 	associate, dissociate, configure, activate, geometry:                                  wl.Listener,
 	role, icon:                                                                            string,
@@ -30,10 +31,9 @@ X11_View :: struct {
 	sent:                                                                                  bool,
 	sent_x, sent_y:                                                                        i32,
 }
-xwayland_surface_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+xwayland_surface_added :: proc(listener: ^wl.Listener, data: rawptr) {
 	s := wl.owner(listener, Server, "new_xwayland_surface")
-	xs := (^wlr.wlr_xwayland_surface)(data)
+	xs := (^xw.Window)(data)
 	v := new(View)
 	x := new(X11_View)
 	s.next_view_id += 1
@@ -65,8 +65,7 @@ xwayland_surface_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	wl.listen(&xs.events.request_minimize, &v.minimize, x11_minimize)
 	fmt.printf("X11 new window=%d handle=%d\n", xs.window_id, v.id)
 }
-x11_associate :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_associate :: proc(listener: ^wl.Listener, data: rawptr) {
 	x := wl.owner(listener, X11_View, "associate")
 	v := x.view
 	context.allocator = v.allocator
@@ -81,9 +80,7 @@ x11_associate :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 		v.id,
 		x.surface,
 	)
-	if wlr.xwayland_map_buffered(x.surface) {
-		fmt.printf("X11 buffered association window=%d handle=%d\n", x.handle.window_id, v.id)
-	}
+
 	if !view_override_redirect(v) {record_size(v)}
 }
 x11_detach :: proc(x: ^X11_View) {
@@ -96,19 +93,17 @@ x11_detach :: proc(x: ^X11_View) {
 	x.surface = nil
 	x.sent = false
 }
-x11_dissociate :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_dissociate :: proc(listener: ^wl.Listener, data: rawptr) {
 	x := wl.owner(listener, X11_View, "dissociate")
 	context.allocator = x.view.allocator
 	x11_detach(x)
 	fmt.printf("X11 dissociate window=%d handle=%d\n", x.handle.window_id, x.view.id)
 }
-x11_configure :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_configure :: proc(listener: ^wl.Listener, data: rawptr) {
 	x := wl.owner(listener, X11_View, "configure")
-	e := (^wlr.wlr_xwayland_surface_configure_event)(data)
-	// wlroots fills absent mask fields from the current cached geometry.
-	if !x.view.mapped {wlr.xwayland_configure(x.handle, i32(e.x), i32(e.y), i32(e.width), i32(e.height))
+	e := (^xw.Configure_Event)(data)
+	// Absent configure fields retain the cached geometry.
+	if !x.view.mapped {x11_configure_window(x.handle, i32(e.x), i32(e.y), i32(e.width), i32(e.height))
 		return}
 	queue_event(
 		x.view.server,
@@ -123,18 +118,16 @@ x11_configure :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 		},
 	)
 }
-x11_activate :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_activate :: proc(listener: ^wl.Listener, data: rawptr) {
 	x := wl.owner(listener, X11_View, "activate")
 	queue_event(
 		x.view.server,
 		vm.Event{name = "request::activate", handle = x.view.id, valid = false},
 	)
 }
-x11_minimize :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_minimize :: proc(listener: ^wl.Listener, data: rawptr) {
 	v := wl.owner(listener, View, "minimize")
-	e := (^wlr.wlr_xwayland_minimize_event)(data)
+	e := (^xw.Minimize_Event)(data)
 	queue_event(
 		v.server,
 		vm.Event {
@@ -145,8 +138,7 @@ x11_minimize :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 		},
 	)
 }
-x11_geometry :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_geometry :: proc(listener: ^wl.Listener, data: rawptr) {
 	x := wl.owner(listener, X11_View, "geometry")
 	xs := x.handle
 	if x.view.mapped && xs.override_redirect {
@@ -175,7 +167,7 @@ publish_view_size :: proc(v: ^View, width, height: i32) {
 		px, py: i32
 		if !view_position(v, &px, &py) {return}
 		if changed || !x.sent || px != x.sent_x || py != x.sent_y {
-			if !wlr.xwayland_configure(x.handle, px, py, width, height) {
+			if !x11_configure_window(x.handle, px, py, width, height) {
 				fmt.eprintln(
 					"X11 published geometry exceeds protocol limits; retaining last X geometry",
 				)
@@ -199,11 +191,7 @@ publish_view_size :: proc(v: ^View, width, height: i32) {
 x11_read_role :: proc(x: ^X11_View) {
 	delete(x.role, x.view.allocator)
 	context.allocator = x.view.allocator
-	x.role = xcb.role(
-		wlr.xwayland_connection(x.view.server.xwayland),
-		x.handle.window_id,
-		x.view.server.x11_atoms[14],
-	)
+	x.role = strings.clone(x.handle.role)
 }
 x11_read_icon :: proc(x: ^X11_View) {
 	context.allocator = x.view.allocator
@@ -211,7 +199,7 @@ x11_read_icon :: proc(x: ^X11_View) {
 	key := fmt.aprintf("xwl-icon:%d", x.view.id)
 	defer delete(key)
 	pixels, w, h := ewmh.icon(
-		wlr.xwayland_connection(s.xwayland),
+		xw.connection(s.xwayland),
 		x.handle.window_id,
 		s.x11_atoms[15],
 	)
@@ -226,7 +214,7 @@ x11_types :: proc(x: ^X11_View) -> string {
 	names := X11_TYPES
 	buf: [256]u8
 	n := 0
-	for atom in x.handle.window_type[:x.handle.window_type_len] {
+	for atom in x.handle.window_type {
 		for known, i in x.view.server.x11_atoms[:14] {
 			if known == 0 || atom != known {continue}
 			name := names[i]
@@ -240,15 +228,13 @@ x11_types :: proc(x: ^X11_View) -> string {
 	}
 	return strings.clone(string(buf[:n]))
 }
-x11_role_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_role_changed :: proc(listener: ^wl.Listener, data: rawptr) {
 	x := wl.owner(listener, X11_View, "role_changed")
 	if !x.view.mapped {return}
 	x11_read_role(x)
 	queue_client(x.view, "metadata")
 }
-x11_icon_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_icon_changed :: proc(listener: ^wl.Listener, data: rawptr) {
 	x := wl.owner(listener, X11_View, "icon_changed")
 	if !x.view.mapped {return}
 	x11_read_icon(x)
@@ -262,34 +248,30 @@ x11_urgency :: proc(x: ^X11_View) {
 			name = "request::urgent",
 			handle = x.view.id,
 			map_epoch = x.view.map_epoch,
-			on = icccm.urgent(x.handle.hints),
+			on = xw.urgent(x.handle.hints),
 		},
 	)
 }
-x11_hints_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_hints_changed :: proc(listener: ^wl.Listener, data: rawptr) {
 	x11_urgency(wl.owner(listener, X11_View, "hints_changed"))
 }
-x11_types_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_types_changed :: proc(listener: ^wl.Listener, data: rawptr) {
 	x := wl.owner(listener, X11_View, "types_changed")
 	if x.view.mapped {queue_client(x.view, "metadata")}
 }
-x11_parent_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_parent_changed :: proc(listener: ^wl.Listener, data: rawptr) {
 	x := wl.owner(listener, X11_View, "parent_changed")
 	if x.view.mapped {queue_client(x.view, "metadata")}
 }
 
 // MapNotify can rewrite _NET_WM_STATE before association has read the initial hints.
 // Capture the client's request at the public pre-map hook; Lua still grants it.
-x11_map_request :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+x11_map_request :: proc(listener: ^wl.Listener, data: rawptr) {
 	x := wl.owner(listener, X11_View, "map_request")
 	s := x.view.server
 	x.initial_state = false
 	reply := xcb.property(
-		wlr.xwayland_connection(s.xwayland),
+		xw.connection(s.xwayland),
 		x.handle.window_id,
 		s.x11_atoms[16],
 		2048,
@@ -333,11 +315,11 @@ x11_settled_state :: proc(s: ^Server, e: ^vm.Event) {
 		if x == nil {return}
 		xs := x.handle
 		if xs.fullscreen !=
-		   x.granted_fullscreen {wlr.xwayland_fullscreen(xs, x.granted_fullscreen)}
+		   x.granted_fullscreen {xw.set_fullscreen(xs, x.granted_fullscreen)}
 		if xs.maximized_horz != x.granted_maximized ||
 		   xs.maximized_vert !=
-			   x.granted_maximized {wlr.xwayland_maximize(xs, x.granted_maximized)}
-		if xs.minimized != x.granted_minimized {wlr.xwayland_minimize(xs, x.granted_minimized)}
+			   x.granted_maximized {xw.set_maximized(xs, x.granted_maximized)}
+		if xs.minimized != x.granted_minimized {xw.set_minimized(xs, x.granted_minimized)}
 		ext.foreign_fullscreen(v.foreign_handle, x.granted_fullscreen)
 		ext.foreign_maximized(v.foreign_handle, x.granted_maximized)
 		ext.foreign_minimized(v.foreign_handle, x.granted_minimized)

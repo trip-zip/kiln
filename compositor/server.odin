@@ -1,5 +1,7 @@
 package compositor
 
+import xw "../xwayland"
+
 import st "../seat"
 
 import sh "../shells"
@@ -61,11 +63,9 @@ Server :: struct {
 	gamma:                                                                                ^ext.Gamma,
 	layout:                                                                               ^wlr.wlr_output_layout,
 	shell:                                                                                ^sh.Shell,
-	xwayland:                                                                             ^wlr.wlr_xwayland,
+	xwayland:                                                                             ^xw.Server,
 	x11_atoms:                                                                            [21]u32,
-	xwayland_ready, xwayland_start, xwayland_destroy, new_xwayland_surface:               wl.Listener,
-	xwayland_watch:                                                                       ^wl.Event_Source,
-	xwayland_polls:                                                                       int,
+	xwayland_ready, xwayland_destroy, new_xwayland_surface:               wl.Listener,
 	layer_shell:                                                                          ^sh.Layer_Shell,
 	activation:                                                                           ^ext.Activation,
 	foreign_manager:                                                                      ^ext.Foreign_Manager,
@@ -148,7 +148,7 @@ destroy :: proc(s: ^Server) {
 	shutdown_pipes(s)
 	runtime_grab_keyboard(s, false)
 	runtime_grab_pointer(s, false)
-	if s.xwayland != nil {wlr.xwayland_destroy(s.xwayland)}
+	if s.xwayland != nil {xw.server_destroy(s.xwayland)}
 	if s.display != nil {wl.destroy_clients(s.display)}
 	fmt.printf("Protocol cleanup: layers %d, popups %d\n", len(s.layers), len(s.popups))
 	wl.unlisten(&s.new_constraint)
@@ -296,7 +296,7 @@ run :: proc(startup_command := "") -> bool {
 	defer delete(socket)
 	if !wl.add_socket(s.display, socket) {return false}
 	if !wlr.wlr_backend_start(s.backend) || s.failed {return false}
-	init_xwayland(&s, compositor)
+	init_xwayland(&s)
 	runtime_cursor(&s, "default")
 	child := wl.on_signal(s.display, .SIGCHLD, startup_exited, &s)
 	if child == nil {return false}

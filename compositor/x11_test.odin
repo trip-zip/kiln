@@ -1,5 +1,6 @@
 package compositor
 
+import xw "../xwayland"
 
 import vm "../lua_runtime"
 import wl "../wayland"
@@ -18,13 +19,13 @@ x11_snapshots_use_associated_commits_and_owned_metadata :: proc(t: ^testing.T) {
 	surface := wlr.wlr_surface {
 		current = {width = 301, height = 207},
 	}
-	title := strings.clone_to_cstring("title")
-	class := strings.clone_to_cstring("Class")
-	instance := strings.clone_to_cstring("instance")
+	title := strings.clone("title")
+	class := strings.clone("Class")
+	instance := strings.clone("instance")
 	defer delete(title)
 	defer delete(class)
 	defer delete(instance)
-	parent_handle: wlr.wlr_xwayland_surface
+	parent_handle: xw.Window
 	parent_x := X11_View {
 		handle = &parent_handle,
 	}
@@ -36,9 +37,11 @@ x11_snapshots_use_associated_commits_and_owned_metadata :: proc(t: ^testing.T) {
 		map_epoch = 1,
 	}
 	parent_x.view = &parent
-	xs := wlr.wlr_xwayland_surface {
+	xs := xw.Window {
 		title          = title,
 		class          = class,
+		has_class      = true,
+		has_instance   = true,
 		instance       = instance,
 		pid            = 1234,
 		x              = 31,
@@ -78,9 +81,9 @@ x11_snapshots_use_associated_commits_and_owned_metadata :: proc(t: ^testing.T) {
 		e.pid == 1234 && e.fullscreen && e.minimized && !e.maximized && !e.has_app_id,
 	)
 	testing.expect(t, s.events[1].width == 301 && s.events[1].height == 207)
-	(([^]u8)(title))[0] = 'X'
-	(([^]u8)(class))[0] = 'X'
-	(([^]u8)(instance))[0] = 'X'
+	(transmute([]u8)title)[0] = 'X'
+	(transmute([]u8)class)[0] = 'X'
+	(transmute([]u8)instance)[0] = 'X'
 	(transmute([]u8)role)[0] = 'X'
 	testing.expect_value(t, e.role, "test-role")
 	testing.expect_value(t, e.icon, "xwl-icon:2")
@@ -96,7 +99,7 @@ x11_snapshots_use_associated_commits_and_owned_metadata :: proc(t: ^testing.T) {
 		"return facts[1].wm_class,facts[1].wm_instance,facts[1].pid,facts[1].app_id,facts[2].width",
 		"Class\tinstance\t1234\tnil\t301\n",
 	)
-	configure := wlr.wlr_xwayland_surface_configure_event {
+	configure := xw.Configure_Event {
 		x      = 200,
 		y      = 300,
 		width  = 400,
@@ -123,7 +126,7 @@ x11_snapshots_use_associated_commits_and_owned_metadata :: proc(t: ^testing.T) {
 @(test)
 x11_configure_rejects_unrepresentable_values_before_ffi :: proc(t: ^testing.T) {
 	for box in ([6][4]i32{{-32769, 0, 1, 1}, {32768, 0, 1, 1}, {0, -32769, 1, 1}, {0, 32768, 1, 1}, {0, 0, 65536, 1}, {0, 0, 1, 65536}}) {
-		testing.expect(t, !wlr.xwayland_configure(nil, box[0], box[1], box[2], box[3]))
+		testing.expect(t, !x11_configure_window(nil, box[0], box[1], box[2], box[3]))
 	}
-	testing.expect(t, !wlr.xwayland_configure(nil, 0, 0, 0, 1))
+	testing.expect(t, !x11_configure_window(nil, 0, 0, 0, 1))
 }
