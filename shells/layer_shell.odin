@@ -1,10 +1,9 @@
 package shells
 
+import out "../outputs"
 import sf "../surfaces"
-
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:strings"
 
@@ -34,7 +33,7 @@ Layer_Surface :: struct {
 	resource, owner:                                    ^wl.Resource,
 	shell:                                              ^Layer_Shell,
 	surface:                                            ^sf.Surface,
-	output:                                             ^wlr.wlr_output,
+	output:                                             ^out.Output,
 	namespace:                                          string,
 	current, pending:                                   Layer_State,
 	initialized, initial_commit, configured, unmapping: bool,

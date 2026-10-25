@@ -91,13 +91,13 @@ Zwlr_Gamma_Control_V1_Error :: enum u32 {
 	invalid_gamma = 1,
 }
 
-wlr_gamma_control_unstable_v1_interfaces := [?]^wl.Interface{
+zwlr_gamma_control_unstable_v1_interfaces := [?]^wl.Interface{
 	&zwlr_gamma_control_manager_v1,
 	&zwlr_gamma_control_v1,
 }
 
 @(init, private)
-wlr_gamma_control_unstable_v1_init_types :: proc "contextless"() {
+zwlr_gamma_control_unstable_v1_init_types :: proc "contextless"() {
 	zwlr_gamma_control_manager_v1_request_get_gamma_control_types[0] = &zwlr_gamma_control_v1
 	zwlr_gamma_control_manager_v1_request_get_gamma_control_types[1] = &wl_output
 }

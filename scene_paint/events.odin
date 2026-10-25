@@ -1,9 +1,8 @@
 package scene_paint
 
+import out "../outputs"
 import sf "../surfaces"
-
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 
 // These are native event subscriptions only: placement always comes from the part list.
@@ -72,7 +71,7 @@ surface_visibility :: proc(e: ^Surface_Events, visible: bool) {
 	} else {
 		sf.leave(e.surface, e.output.handle)
 	}
-	outputs := make([dynamic]^wlr.wlr_output, context.temp_allocator)
+	outputs := make([dynamic]^out.Output, context.temp_allocator)
 	for o in e.output.scene.outputs {
 		for other in o.subscriptions {
 			if other.surface == e.surface && other.entered {append(&outputs, o.handle)}

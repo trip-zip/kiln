@@ -34,22 +34,22 @@ backend :: proc() -> Backend {
 backend_env :: proc(b: Backend, env: ^[dynamic]string) {
 	switch b {
 	case .Headless:
-		append(env, strings.clone("WLR_BACKENDS=headless"), strings.clone("WLR_LIBINPUT_NO_DEVICES=1"))
+		append(env, strings.clone("KILN_BACKEND=headless"))
 	case .Nested:
 		outer := os.get_env("WAYLAND_DISPLAY", context.temp_allocator)
 		dir := os.get_env("XDG_RUNTIME_DIR", context.temp_allocator)
-		append(env, strings.clone("WLR_BACKENDS=wayland"), fmt.aprintf("WAYLAND_DISPLAY=%s/%s", dir, outer))
+		append(env, strings.clone("KILN_BACKEND=nested"), fmt.aprintf("WAYLAND_DISPLAY=%s/%s", dir, outer))
 	}
 }
 
-boot :: proc(t: ^testing.T, config: string) -> (s: Session, ok: bool) {
-	s, ok = boot_start(t, config)
+boot :: proc(t: ^testing.T, config: string, binary := ROOT + "build/kiln") -> (s: Session, ok: bool) {
+	s, ok = boot_start(t, config, binary)
 	// Cleanup must precede copying the returned Session, including its owned strings.
 	if !ok { stop(&s) }
 	return
 }
 
-boot_start :: proc(t: ^testing.T, config: string) -> (s: Session, ok: bool) {
+boot_start :: proc(t: ^testing.T, config: string, binary := ROOT + "build/kiln") -> (s: Session, ok: bool) {
 	err: os.Error
 	s.work, err = os.make_directory_temp("", "kiln-test-", context.allocator)
 	if !testing.expect(t, err == nil, "temp dir") { return }
@@ -79,7 +79,7 @@ boot_start :: proc(t: ^testing.T, config: string) -> (s: Session, ok: bool) {
 	if !testing.expect(t, lerr == nil, "log file") { return }
 	defer os.close(log)
 	s.process, err = os.process_start({
-		command = {ROOT + "build/kiln"}, env = s.env[:], working_dir = ROOT,
+		command = {binary}, env = s.env[:], working_dir = ROOT,
 		stdout = log, stderr = log,
 	})
 	if !testing.expectf(t, err == nil, "start build/kiln: %v", err) { return }

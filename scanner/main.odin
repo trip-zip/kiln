@@ -91,6 +91,14 @@ number :: proc(doc: ^xml.Document, id: xml.Element_ID, key: string, fallback: i6
 	return value, ok && consumed == len(text)
 }
 
+protocol_identifier :: proc(doc: ^xml.Document, root: xml.Element_ID) -> string {
+	name := attribute(doc,root,"name")
+	prefix := name[:strings.index_byte(name,'_')] if strings.index_byte(name,'_') >= 0 else name
+	interfaces := children(doc,root,"interface")
+	if id,ok := next(&interfaces); ok && strings.has_prefix(attribute(doc,id,"name"),fmt.tprintf("z%s_",prefix)) { return fmt.tprintf("z%s",name) }
+	return name
+}
+
 generate :: proc(input, source: string, export_c: bool) -> (output, error: string) {
 	doc, parse_error := xml.parse(input)
 	defer xml.destroy(doc)
@@ -126,7 +134,7 @@ generate :: proc(input, source: string, export_c: bool) -> (output, error: strin
 		enums := children(doc, id, "enum")
 		for enumeration in next(&enums) { emit_enum(&b, doc, enumeration, name) }
 	}
-	fmt.wprintf(w, "%s_interfaces := [?]^wl.Interface{{\n", attribute(doc, root, "name"))
+	fmt.wprintf(w, "%s_interfaces := [?]^wl.Interface{{\n", protocol_identifier(doc, root))
 	interfaces = children(doc, root, "interface")
 	for id in next(&interfaces) { fmt.wprintf(w, "\t&%s,\n", identifier(attribute(doc, id, "name"))) }
 	fmt.wprintln(w, "}")
@@ -252,7 +260,7 @@ emit_messages :: proc(b: ^strings.Builder, doc: ^xml.Document, id: xml.Element_I
 // Package initialization breaks declaration cycles for recursive protocol interfaces.
 emit_type_links :: proc(b: ^strings.Builder, doc: ^xml.Document, root: xml.Element_ID) {
 	w := strings.to_writer(b)
-	fmt.wprintf(w, "\n@(init, private)\n%s_init_types :: proc \"contextless\"() {{\n", attribute(doc, root, "name"))
+	fmt.wprintf(w, "\n@(init, private)\n%s_init_types :: proc \"contextless\"() {{\n", protocol_identifier(doc, root))
 	interfaces := children(doc, root, "interface")
 	for id in next(&interfaces) {
 		name := attribute(doc, id, "name")

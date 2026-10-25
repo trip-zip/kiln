@@ -1,25 +1,26 @@
 package extensions
 
+import gles "../gles"
+import out "../outputs"
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 
 Xdg_Output_Manager :: struct {
 	global: ^wl.Global,
-	layout: ^wlr.wlr_output_layout,
+	layout: ^out.Layout,
 	outputs: [dynamic]^Xdg_Output,
 	destroy, layout_destroy: wl.Listener,
 }
 Xdg_Output :: struct {
 	manager: ^Xdg_Output_Manager,
 	resource: ^wl.Resource,
-	output: ^wlr.wlr_output,
-	box: wlr.Box,
+	output: ^out.Output,
+	box: gles.Box,
 	destroy, description: wl.Listener,
 }
 
-xdg_output_create :: proc(display: ^wl.Display, layout: ^wlr.wlr_output_layout) -> ^Xdg_Output_Manager {
+xdg_output_create :: proc(display: ^wl.Display, layout: ^out.Layout) -> ^Xdg_Output_Manager {
 	m := new(Xdg_Output_Manager)
 	m.layout = layout
 	m.global = wl.global_create_typed(display, &p.zxdg_output_manager_v1, 3, m, xdg_output_request)
@@ -44,7 +45,7 @@ xdg_output_release :: proc(o: ^Xdg_Output) {
 	wl.unlisten(&o.description)
 	o.output = nil
 }
-xdg_output_layout_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+xdg_output_layout_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	m := wl.owner(listener, Xdg_Output_Manager, "layout_destroy")
 	context = m.global.display.loop.ctx
@@ -52,7 +53,7 @@ xdg_output_layout_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	m.layout = nil
 	wl.unlisten(listener)
 }
-xdg_output_lost :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+xdg_output_lost :: proc (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	xdg_output_release(wl.owner(listener, Xdg_Output, "destroy"))
 }
@@ -62,13 +63,13 @@ xdg_output_resource_destroy :: proc(r: ^wl.Resource) {
 	for other, i in o.manager.outputs { if other == o { ordered_remove(&o.manager.outputs, i); break } }
 	free(o)
 }
-xdg_output_description :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+xdg_output_description :: proc (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	o := wl.owner(listener, Xdg_Output, "description")
 	context = o.resource.client.display.loop.ctx
-	if o.resource.version >= 3 && o.output.description != nil {
+	if o.resource.version >= 3 && o.output.description != "" {
 		wl.post(o.resource, u32(p.Zxdg_Output_V1_Event.description), wl.String{value = string(o.output.description)})
-		wlr.wlr_output_schedule_done(o.output)
+		out.schedule_done(o.output)
 	}
 }
 xdg_output_details :: proc(o: ^Xdg_Output) {
@@ -76,14 +77,14 @@ xdg_output_details :: proc(o: ^Xdg_Output) {
 	wl.post(o.resource, u32(p.Zxdg_Output_V1_Event.logical_size), wl.Int(o.box.width), wl.Int(o.box.height))
 	if o.resource.version < 3 { wl.post(o.resource, u32(p.Zxdg_Output_V1_Event.done)) }
 	// Queue completion after every resource's properties, including core output changes.
-	wlr.wlr_output_schedule_done(o.output)
+	out.schedule_done(o.output)
 }
-xdg_output_update :: proc(m: ^Xdg_Output_Manager, output: ^wlr.wlr_output = nil) {
+xdg_output_update :: proc(m: ^Xdg_Output_Manager, output: ^out.Output = nil) {
 	if m == nil || m.layout == nil { return }
 	for o in m.outputs {
 		if o.output == nil || output != nil && o.output != output { continue }
-		box: wlr.Box
-		wlr.wlr_output_layout_get_box(m.layout, o.output, &box)
+		box: gles.Box
+		box = out.layout_box(m.layout, o.output)
 		if box != o.box { o.box = box; xdg_output_details(o) }
 	}
 }
@@ -106,11 +107,11 @@ xdg_output_request :: proc(r: ^wl.Resource, request: p.Zxdg_Output_Manager_V1_Re
 		wl.listen(&o.output.events.description, &o.description, xdg_output_description)
 		if r.version >= 2 {
 			wl.post(o.resource, u32(p.Zxdg_Output_V1_Event.name), wl.String{value = string(o.output.name)})
-			if o.output.description != nil {
+			if o.output.description != "" {
 				wl.post(o.resource, u32(p.Zxdg_Output_V1_Event.description), wl.String{value = string(o.output.description)})
 			}
 		}
-		wlr.wlr_output_layout_get_box(m.layout, o.output, &o.box)
+		o.box = out.layout_box(m.layout, o.output)
 		xdg_output_details(o)
 	}
 }

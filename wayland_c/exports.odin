@@ -1,4 +1,4 @@
-// This boundary exists only while C libraries bind server symbols and is deleted with wlroots.
+// C protocol fixtures need the server ABI exported from the executable.
 package wayland_c
 
 import p "../protocols"

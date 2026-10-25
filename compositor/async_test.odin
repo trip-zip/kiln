@@ -1,10 +1,9 @@
 package compositor
 
+import out "../outputs"
 import sp "../scene_paint"
-
 import vm "../lua_runtime"
 import wl "../wayland"
-import wlr "../wlroots"
 import "core:testing"
 import "core:time"
 
@@ -85,7 +84,7 @@ frame_clock_elapsed_generation_disabled_and_removal :: proc(t: ^testing.T) {
 		display = wl.create(),
 	}
 	defer destroy(&s)
-	handle := wlr.wlr_output {
+	handle := out.Output {
 		name    = "A",
 		enabled = true,
 	}
@@ -160,7 +159,7 @@ unrelated_async_work_does_not_block_layout :: proc(t: ^testing.T) {
 		display = wl.create(),
 	}
 	defer destroy(&s)
-	handle := wlr.wlr_output {
+	handle := out.Output {
 		name = "A",
 	}
 	o := Output {
@@ -191,9 +190,9 @@ focus_transfer_waits_for_dirty_destination_but_omission_clears :: proc(t: ^testi
 		requested_focus = 7,
 	}
 	defer destroy(&s)
-	h1, h2 := wlr.wlr_output {
+	h1, h2 := out.Output {
 			enabled = true,
-		}, wlr.wlr_output {
+		}, out.Output {
 			enabled = true,
 		}
 	a, b := Output {

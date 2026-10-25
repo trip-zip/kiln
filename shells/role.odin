@@ -1,15 +1,14 @@
 package shells
 
+import gles "../gles"
+import out "../outputs"
 import sf "../surfaces"
-
 import st "../seat"
-
 import wl "../wayland"
-import wlr "../wlroots"
 
 Surface_Role :: sf.Role
 surface_of :: proc(r: ^wl.Resource) -> ^sf.Surface { return sf.of(r) if r != nil else nil }
-output_of :: proc(r: ^wl.Resource) -> ^wlr.wlr_output { return wlr.wlr_output_from_resource(r) if r != nil else nil }
+output_of :: proc(r: ^wl.Resource) -> ^out.Output { return out.of(r) if r != nil else nil }
 has_buffer :: sf.has_buffer
 map_surface :: sf.map_
 unmap_surface :: sf.unmap
@@ -85,7 +84,7 @@ xdg_of :: proc(surface: ^sf.Surface) -> ^Xdg_Surface {
 	x, _ := roles[surface].(^Xdg_Surface)
 	return x
 }
-surface_extents :: proc(s: ^sf.Surface, x := i32(0), y := i32(0)) -> wlr.Box { return wlr.Box(sf.extents(s,x,y)) }
+surface_extents :: proc(s: ^sf.Surface, x := i32(0), y := i32(0)) -> gles.Box { return gles.Box(sf.extents(s,x,y)) }
 
 seat_client_of :: st.client_of
 valid_grab_serial :: st.valid_serial
@@ -98,7 +97,7 @@ popup_list :: proc(surface: ^sf.Surface) -> ^[dynamic]^Popup {
 	}
 	return nil
 }
-window_geometry :: proc(surface: ^sf.Surface) -> wlr.Box {
+window_geometry :: proc(surface: ^sf.Surface) -> gles.Box {
 	if x := xdg_of(surface); x != nil {
 		if x.toplevel != nil {return x.toplevel.geometry}
 		if x.popup != nil {return x.popup.geometry}

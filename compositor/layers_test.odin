@@ -1,12 +1,11 @@
 package compositor
 
+import out "../outputs"
 import sh "../shells"
-
 import layout "../layout"
 import vm "../lua_runtime"
 import sp "../scene_paint"
 import wl "../wayland"
-import wlr "../wlroots"
 import "core:strings"
 import "core:testing"
 
@@ -100,7 +99,7 @@ layer_output_removal_preserves_only_compositor_selected_owners :: proc(t: ^testi
 	s: Server
 	defer delete(s.layers)
 	defer delete(s.outputs)
-	old_handle, next_handle: wlr.wlr_output
+	old_handle, next_handle: out.Output
 	old := Output {
 		handle = &old_handle,
 	}

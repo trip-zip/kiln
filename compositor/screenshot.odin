@@ -17,7 +17,7 @@ runtime_screenshot :: proc(data: rawptr, name: string, path: cstring) -> string 
 		draw := sp.get_scene_output(s.scene, o.handle)
 		if draw == nil {return ""}
 		if locked(s) && !sp.output_commit(draw) {return ""}
-		surface, ok := readback.capture(sp.target_buffer(draw.last), o.handle, s.gles)
+		surface, ok := readback.capture(draw.last, o.handle, s.gles)
 		if !ok {return ""}
 		s.screenshot_seq += 1
 		key := fmt.aprintf("screenshot:%d", s.screenshot_seq)

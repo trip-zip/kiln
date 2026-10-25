@@ -1,24 +1,23 @@
 package compositor
 
+import bk "../backend"
 import st "../seat"
-
 import "base:runtime"
 import "core:fmt"
 import "core:strings"
 import "../keymap"
 import cfg "../input_config"
 import wl "../wayland"
-import wlr "../wlroots"
 
 Pointer :: struct {
 	server:  ^Server,
-	device:  ^wlr.wlr_input_device,
+	device:  ^bk.Device,
 	id:      u64,
 	destroy, motion, absolute, button, axis, frame: wl.Listener,
 	output: ^Output,
 }
 
-pointer_destroy :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+pointer_destroy :: proc (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	p := wl.owner(listener, Pointer, "destroy")
 	wl.unlisten(listener)
@@ -101,9 +100,9 @@ runtime_cursor_theme :: proc(data: rawptr, name: cstring, size: u32) {
 
 map_pointers :: proc(s: ^Server) {
 	for p in s.pointers {
-		handle := wlr.wlr_pointer_from_input_device(p.device)
+		handle := bk.pointer_of(p.device)
 		p.output = nil
-		if handle.output_name == nil {continue}
+		if handle.output_name == "" {continue}
 		for o in s.outputs {
 			if string(o.handle.name) == string(handle.output_name) {
 				p.output = o

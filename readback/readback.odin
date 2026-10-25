@@ -1,6 +1,6 @@
 package readback
 
-import wlr "../wlroots"
+import out "../outputs"
 import paint "../paint"
 import cairo "../cairo"
 import "../gles"
@@ -11,7 +11,7 @@ when #config(KILN_OUTPUT_FIXTURE, false) {fail_after: i32} else {fail_after :: 0
 // Capture the exact committed frame without acquiring or painting another buffer.
 capture :: proc(
 	buffer: ^gles.Buffer,
-	output: ^wlr.wlr_output,
+	output: ^out.Output,
 	renderer: ^gles.Renderer,
 ) -> (paint.Surface, bool) {
 	if output == nil || !output.enabled || buffer == nil {return {}, false}

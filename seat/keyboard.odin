@@ -1,10 +1,9 @@
 package seat
 
+import bk "../backend"
 import sf "../surfaces"
-
 import wl "../wayland"
 import p "../protocols"
-import wlr "../wlroots"
 import keys "../keymap"
 import xkb "../xkbcommon"
 import "base:runtime"
@@ -13,7 +12,7 @@ import "core:sys/linux"
 
 Modifiers :: keys.Modifiers
 Keyboard :: struct {
-	handle: ^wlr.wlr_keyboard,
+	handle: ^bk.Keyboard,
 	ctx: runtime.Context,
 	keymap: ^keys.Map,
 	state: ^keys.State,
@@ -35,7 +34,7 @@ Keyboard_State :: struct {
 	keycodes: [dynamic]u32,
 	destroy: wl.Listener,
 }
-keyboard_init :: proc(kb: ^Keyboard, handle: ^wlr.wlr_keyboard) {
+keyboard_init :: proc(kb: ^Keyboard, handle: ^bk.Keyboard) {
 	kb.handle, kb.keymap_fd, kb.ctx = handle, -1, context
 	kb.repeat_rate, kb.repeat_delay = 25, 600
 	for signal in ([]^wl.Signal{&kb.events.key, &kb.events.modifiers, &kb.events.destroy}) { wl.signal_init(signal) }
@@ -53,20 +52,18 @@ keyboard_finish :: proc(kb: ^Keyboard) {
 	delete(kb.keycodes); kb.keycodes = nil
 	wl.signal_emit_final(&kb.events.destroy, kb)
 }
-keyboard_device_gone :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+keyboard_device_gone :: proc (listener: ^wl.Listener, data: rawptr) {
 	kb := wl.owner(listener, Keyboard, "destroy")
 	context = kb.ctx
 	keyboard_finish(kb)
 }
-keyboard_device_key :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+keyboard_device_key :: proc (listener: ^wl.Listener, data: rawptr) {
 	kb := wl.owner(listener, Keyboard, "key")
 	context = kb.ctx
-	e := cast(^wlr.wlr_keyboard_key_event)data
+	e := cast(^bk.Key_Event)data
 	keyboard_update_key(kb, e)
 }
-keyboard_update_key :: proc(kb: ^Keyboard, e: ^wlr.wlr_keyboard_key_event) {
+keyboard_update_key :: proc(kb: ^Keyboard, e: ^bk.Key_Event) {
 	found := false
 	for code, i in kb.keycodes { if code == e.keycode { found = true; if e.state == 0 { ordered_remove(&kb.keycodes, i) }; break } }
 	if e.state == 1 && !found { append(&kb.keycodes, e.keycode) }

@@ -1,11 +1,12 @@
 package compositor
 
+import bk "../backend"
+import out "../outputs"
 import "../layout"
 import p "../protocols"
 import sp "../scene_paint"
 import sh "../shells"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:testing"
 
@@ -17,13 +18,13 @@ lock_test_server :: proc(outputs := 1) -> ^Server {
 		o := new(Output); o.server = s
 		assert(layout.init(&o.ui))
 		if i == 0 {o.handle = foreign_test_output(s)} else {
-			o.handle = wlr_headless_add_output(s.backend, 16, 12)
-			state: wlr.wlr_output_state
-			wlr.wlr_output_state_init(&state)
-			wlr.wlr_output_state_set_enabled(&state, true)
-			assert(wlr.wlr_output_commit_state(o.handle, &state))
-			wlr.wlr_output_state_finish(&state)
-			assert(wlr.wlr_output_layout_add_auto(s.layout, o.handle) != nil)
+			o.handle = bk.headless_add_output(s.backend, 16, 12)
+			state: out.State
+			out.state_init(&state)
+			out.set_enabled(&state, true)
+			assert(out.commit(o.handle, &state))
+			out.state_finish(&state)
+			assert(out.layout_add_auto(s.layout, o.handle) != nil)
 		}
 		o.paint.scene = s.scene
 		append(&s.outputs, o); append(&s.scene.outputs, &o.paint)
@@ -54,7 +55,7 @@ lock_test_surface :: proc(c: ^Extension_Client) -> []u8 {
 }
 lock_test_present :: proc(o: ^Output, submitted: u32 = 10, presented: u32 = 10, success := true) {
 	o.lock_submitted, o.lock_commit_seq = true, submitted
-	event := wlr.wlr_output_event_present {
+	event := out.Present_Event {
 		commit_seq = presented,
 		presented  = success,
 	}
@@ -247,7 +248,7 @@ owned_lock_output_and_resource_lifetime_and_serial_wrap :: proc(t: ^testing.T) {
 			extension_send(&c, []u32{12, 8 << 16, 14, 8 << 16})
 		case 2:
 			wl.unlisten(&s.outputs[0].present)
-			wlr.wlr_backend_destroy(s.backend); s.backend = nil
+			bk.destroy(s.backend); s.backend = nil
 			// Output destruction makes the role resource inert even before the client notices removal.
 			extension_send(&c, []u32{14, 12 << 16 | 1, 0, 14, 8 << 16, 12, 8 << 16})
 			sp.output_finish(

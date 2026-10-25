@@ -1,10 +1,10 @@
 package compositor
 
+import bk "../backend"
+import out "../outputs"
 import st "../seat"
-
 import "core:testing"
 import wl "../wayland"
-import wlr "../wlroots"
 import vm "../lua_runtime"
 
 @(test)
@@ -12,7 +12,7 @@ queued_motion_uses_preceding_claim_and_copies_raw_deltas :: proc(t: ^testing.T) 
     s:=Server{display=wl.create()}
     defer destroy(&s)
     s.seat=st.create(s.display,"motion")
-    s.layout=wlr.wlr_output_layout_create(s.display)
+    s.layout=out.layout_create(s.display)
     s.cursor_manager=st.xcursor_manager_create(nil,24)
     s.lua.data=&s;s.lua.grab_pointer=runtime_grab_pointer
     testing.expect(t,vm.init(&s.lua))
@@ -21,9 +21,9 @@ queued_motion_uses_preceding_claim_and_copies_raw_deltas :: proc(t: ^testing.T) 
         elseif e.name=='claim-off' then core.input.grab_pointer(false)
         elseif e.name=='motion' then seen[#seen+1]=e._claimed and 'claimed' or 'released' end
     end)`,"\n")
-    pointer:wlr.wlr_pointer
+    pointer:bk.Pointer
     device:=Pointer{server=&s}
-    input:=wlr.wlr_pointer_motion_event{pointer=&pointer,time_msec=123,delta_x=5,delta_y=-2,unaccel_dx=7,unaccel_dy=-3}
+    input:=bk.Motion_Event{pointer=&pointer,time_msec=123,delta_x=5,delta_y=-2,unaccel_dx=7,unaccel_dy=-3}
     queue_event(&s,vm.Event{name="claim-on"})
     cursor_motion(&device.motion,&input)
     testing.expect_value(t,s.events[1].dx,f64(5))

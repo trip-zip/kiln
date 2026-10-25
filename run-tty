@@ -30,9 +30,8 @@ printf 'Starting Kiln. Super+Shift+q quits.\nConfig: %s\nLog: %s/server.log\n' \
 
 kiln_result=0
 env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET \
-    -u WLR_LIBINPUT_NO_DEVICES -u WLR_RENDERER \
     KILN_TRIAL="$kiln_trial" KILN_RC="$kiln_config" \
-    KILN_SOCK="$kiln_trial/eval.sock" WLR_BACKENDS=drm,libinput \
+    KILN_SOCK="$kiln_trial/eval.sock" KILN_BACKEND=drm \
     XDG_SESSION_TYPE=wayland \
     dbus-run-session -- sh -c '
         printf "%s\n" "$$" > "$KILN_TRIAL/compositor.pid"

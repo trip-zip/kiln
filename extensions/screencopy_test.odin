@@ -1,7 +1,8 @@
 package extensions
 
+import bk "../backend"
+import out "../outputs"
 import "../buffers"
-
 import "../gles"
 import paint "../paint"
 import p "../protocols"
@@ -9,26 +10,20 @@ import "../readback"
 import sp "../scene_paint"
 import wl "../wayland"
 import wire "../wayland_c"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:sys/linux"
 import "core:testing"
 
-foreign import lib "system:wlroots-0.20"
-foreign lib {
-	wlr_headless_backend_create :: proc(loop: ^wl.Loop) -> ^wlr.wlr_backend ---
-	wlr_headless_add_output :: proc(backend: ^wlr.wlr_backend, width, height: u32) -> ^wlr.wlr_output ---
-	wlr_output_destroy :: proc(output: ^wlr.wlr_output) ---
-}
+
 Capture_Test :: struct {
 	display: ^wl.Display,
 	client: ^wl.Client,
 	peer: wl.Connection,
-	backend: ^wlr.wlr_backend,
+	backend: ^bk.Backend,
 	renderer: ^gles.Renderer,
-	layout: ^wlr.wlr_output_layout,
+	layout: ^out.Layout,
 	scene: ^sp.Scene,
-	output: ^wlr.wlr_output,
+	output: ^out.Output,
 	paint: sp.Output,
 	manager: ^Screencopy,
 }
@@ -77,25 +72,25 @@ capture_setup :: proc(t: ^testing.T, version: u32 = 3) -> ^Capture_Test {
 	wire.install()
 	s := new(Capture_Test)
 	s.display = wl.create()
-	s.backend = wlr_headless_backend_create(s.display.loop)
-	s.renderer = gles.create(wlr.backend_fd(s.backend))
+	s.backend = bk.headless_create(s.display)
+	s.renderer = gles.create(s.backend.drm_fd)
 	assert(s.renderer != nil)
 	shm_formats, dmabuf_formats, device, formats_ok := gles.buffer_formats(s.renderer)
 	assert(formats_ok && buffers.create_globals(s.display, shm_formats, dmabuf_formats, device, s.renderer.fd))
-	s.output = wlr_headless_add_output(s.backend, 16, 12)
-	assert(wlr.wlr_backend_start(s.backend))
-	s.layout = wlr.wlr_output_layout_create(s.display)
+	s.output = bk.headless_add_output(s.backend, 16, 12)
+	assert(bk.start(s.backend))
+	s.layout = out.layout_create(s.display)
 	s.scene = sp.scene_create()
 	s.paint.handle, s.paint.renderer = s.output, s.renderer
-	state: wlr.wlr_output_state
-	wlr.wlr_output_state_init(&state)
-	wlr.wlr_output_state_set_enabled(&state, true)
+	state: out.State
+	out.state_init(&state)
+	out.set_enabled(&state, true)
 	assert(sp.prepare_output(&s.paint, &state, 16, 12) && sp.commit_target(&s.paint, &state))
-	wlr.wlr_output_state_finish(&state)
-	assert(wlr.wlr_output_layout_add_auto(s.layout, s.output) != nil)
+	out.state_finish(&state)
+	assert(out.layout_add_auto(s.layout, s.output) != nil)
 	sp.output_init(&s.paint, s.scene, s.output, s.renderer, s.layout)
 	s.manager = screencopy_create(s.display, s.scene)
-	s.paint.committed = proc(o: ^sp.Output, damage: []wlr.Box) {
+	s.paint.committed = proc(o: ^sp.Output, damage: []gles.Box) {
 		s := runtime.container_of(o, Capture_Test, "paint")
 		screencopy_committed(s.manager, o, damage)
 	}
@@ -111,15 +106,15 @@ capture_setup :: proc(t: ^testing.T, version: u32 = 3) -> ^Capture_Test {
 	it := wl.client_resources(&s.output.resources, s.client)
 	r, found := wl.next_resource(&it)
 	testing.expect(t, found && r == wl.client_get_object(s.client, 4) && output_of(r) == s.output)
-	testing.expect(t, s.output.swapchain == nil && len(s.paint.swapchain.buffers) > 0)
+	testing.expect(t, len(s.paint.swapchain.buffers) > 0)
 	return s
 }
 capture_teardown :: proc(s: ^Capture_Test) {
 	wl.destroy_clients(s.display)
 	wl.connection_close(&s.peer)
 	sp.output_finish(&s.paint)
-	wlr.wlr_backend_destroy(s.backend)
-	if s.layout != nil { wlr.wlr_output_layout_destroy(s.layout) }
+	bk.destroy(s.backend)
+	if s.layout != nil { out.layout_destroy(s.layout) }
 	sp.scene_destroy(s.scene)
 	gles.destroy(s.renderer)
 	wl.destroy(s.display)
@@ -144,7 +139,7 @@ screencopy_matches_last_frame_and_clips_regions :: proc(t: ^testing.T) {
 		s := capture_setup(t, u32(version))
 		defer capture_teardown(s)
 		assert(sp.output_commit(&s.paint))
-		shot, ok := readback.capture(sp.target_buffer(s.paint.last), s.output, s.renderer)
+		shot, ok := readback.capture(s.paint.last, s.output, s.renderer)
 		assert(ok)
 		defer paint.destroy(shot)
 		for region in ([2]bool{false, true}) {
@@ -217,7 +212,7 @@ screencopy_output_loss_fails_pending_frame :: proc(t: ^testing.T) {
 	capture_pump(s)
 	sp.output_finish(&s.paint)
 	s.paint = {}
-	wlr_output_destroy(s.output)
+	out.finish(s.output)
 	testing.expect(t, capture_event(capture_pump(s), 6, 3) != nil)
 	testing.expect(t, s.manager.frames[0].output == nil && s.manager.frames[0].buffer == nil)
 }
@@ -257,24 +252,24 @@ screencopy_disabled_output_and_empty_region_fail :: proc(t: ^testing.T) {
 	defer linux.munmap(raw_data(pixels), uint(len(pixels)))
 	capture_send(s, []u32{6, 12<<16|2, 8})
 	capture_pump(s)
-	state: wlr.wlr_output_state
-	wlr.wlr_output_state_init(&state)
-	defer wlr.wlr_output_state_finish(&state)
-	wlr.wlr_output_state_set_enabled(&state, false)
-	assert(wlr.wlr_output_commit_state(s.output, &state))
+	state: out.State
+	out.state_init(&state)
+	defer out.state_finish(&state)
+	out.set_enabled(&state, false)
+	assert(out.commit(s.output, &state))
 	testing.expect(t, capture_event(capture_pump(s), 6, 3) != nil)
 }
 
 @(test)
 screencopy_region_accounts_for_scale_transform_and_overflow :: proc(t: ^testing.T) {
-	output := wlr.wlr_output{width = 20, height = 12, scale = 2}
-	testing.expect_value(t, screencopy_region(&output, {-2, 1, 5, 3}), wlr.Box{0, 2, 6, 6})
+	output := out.Output{width = 20, height = 12, scale = 2}
+	testing.expect_value(t, screencopy_region(&output, {-2, 1, 5, 3}), gles.Box{0, 2, 6, 6})
 	testing.expect_value(t, screencopy_region(&output, {max(i32), 0, max(i32), 1}).width, i32(0))
 	for transform in 0..<8 {
 		output.transform = i32(transform)
 		w, h := i32(10), i32(6)
 		if transform%2 != 0 { w, h = h, w }
-		testing.expect_value(t, screencopy_region(&output, {0, 0, w, h}), wlr.Box{0, 0, 20, 12})
+		testing.expect_value(t, screencopy_region(&output, {0, 0, w, h}), gles.Box{0, 0, 20, 12})
 	}
 }
 

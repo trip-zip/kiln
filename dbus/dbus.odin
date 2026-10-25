@@ -78,9 +78,10 @@ timeout :: proc(data:rawptr) -> i32 {
     b:=(^Bus)(data);context.allocator=b.allocator
     drain(b);return 0
 }
-open :: proc(b:^Bus,display:^wl.Display) -> bool {
+open :: proc(b:^Bus,display:^wl.Display, system := false) -> bool {
     b.allocator=context.allocator
-    if raw.sd_bus_open_user(&b.handle)<0 { b.handle=nil;fmt.eprintln("dbus: session bus unavailable");return false }
+    connect := raw.sd_bus_open_system if system else raw.sd_bus_open_user
+    if connect(&b.handle)<0 { b.handle=nil;fmt.eprintf("dbus: %s bus unavailable\n", "system" if system else "session");return false }
     b.fd=wl.on_fd(display,raw.sd_bus_get_fd(b.handle),wl.READABLE,readable,b)
     b.timer=wl.on_timer(display,timeout,b)
     if b.fd==nil || b.timer==nil { close(b);return false }

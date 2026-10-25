@@ -34,6 +34,10 @@ SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE :: u64(1<<5)
 foreign import lib "system:systemd"
 foreign lib {
     sd_bus_object_vtable_format: c.uint
+    sd_bus_open_system :: proc(ret: ^^sd_bus) -> c.int ---
+    sd_bus_call :: proc(bus: ^sd_bus, m: ^sd_bus_message, usec: u64, error: ^sd_bus_error, reply: ^^sd_bus_message) -> c.int ---
+    sd_bus_get_property :: proc(bus: ^sd_bus, destination, path, iface, member: cstring, error: ^sd_bus_error, reply: ^^sd_bus_message, signature: cstring) -> c.int ---
+    sd_bus_error_free :: proc(error: ^sd_bus_error) ---
     sd_bus_open_user :: proc(ret: ^^sd_bus) -> c.int ---
     sd_bus_close_unref :: proc(bus: ^sd_bus) -> ^sd_bus ---
     sd_bus_get_fd :: proc(bus: ^sd_bus) -> c.int ---

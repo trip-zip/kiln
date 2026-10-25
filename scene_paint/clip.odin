@@ -1,9 +1,8 @@
 package scene_paint
 
+import gles "../gles"
 import sf "../surfaces"
-
 import layout "../layout"
-import wlr "../wlroots"
 
 Kind :: enum {
 	Solid,
@@ -12,14 +11,14 @@ Kind :: enum {
 }
 
 Part :: struct {
-	box:               wlr.Box,
+	box:               gles.Box,
 	kind:              Kind,
 	color:             [4]f32,
 	pixels:            ^Buffer,
 	surface:           ^sf.Surface,
-	geometry:          wlr.Box,
-	source:            wlr.wlr_fbox,
-	coverage, visible: wlr.Box,
+	geometry:          gles.Box,
+	source:            gles.FBox,
+	coverage, visible: gles.Box,
 	id:                u32,
 	key:               u64,
 	initialized:       bool,
@@ -45,7 +44,7 @@ update :: proc(n: ^Node, command: layout.Command) -> u64 {
 			f32(part.box.height),
 		}
 		crop := layout.crop(absolute, command.clip)
-		visible := wlr.Box{i32(crop.x) - ox, i32(crop.y) - oy, i32(crop.width), i32(crop.height)}
+		visible := gles.Box{i32(crop.x) - ox, i32(crop.y) - oy, i32(crop.width), i32(crop.height)}
 		if !part.initialized || part.visible != visible {
 			mutations += 1
 			if part.pixels != nil && visible.width > 0 && visible.height > 0 {
@@ -78,22 +77,22 @@ placed :: proc(part: Part, command: layout.Command) -> Part {
 }
 
 // Scissors must be disjoint or translucent parts blend twice in the overlap.
-repaint_union :: proc(boxes: []wlr.Box, bounds: wlr.Box) -> [dynamic]wlr.Box {
-	result := make([dynamic]wlr.Box, context.temp_allocator)
+repaint_union :: proc(boxes: []gles.Box, bounds: gles.Box) -> [dynamic]gles.Box {
+	result := make([dynamic]gles.Box, context.temp_allocator)
 	for box in boxes {
 		b := intersection(box, bounds)
 		if b.width <= 0 || b.height <= 0 {continue}
-		pending := make([dynamic]wlr.Box, context.temp_allocator)
+		pending := make([dynamic]gles.Box, context.temp_allocator)
 		append(&pending, b)
 		for covered in result {
-			next := make([dynamic]wlr.Box, context.temp_allocator)
+			next := make([dynamic]gles.Box, context.temp_allocator)
 			for p in pending {
 				overlap := intersection(p, covered)
 				if overlap.width <= 0 || overlap.height <= 0 {
 					append(&next, p)
 					continue
 				}
-				candidates := [4]wlr.Box {
+				candidates := [4]gles.Box {
 					{p.x, p.y, p.width, overlap.y - p.y},
 					{
 						p.x,

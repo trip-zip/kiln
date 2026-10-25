@@ -1,12 +1,11 @@
 package shells
 
+import gles "../gles"
+import out "../outputs"
 import sf "../surfaces"
-
 import st "../seat"
-
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:strings"
 
@@ -43,8 +42,8 @@ Toplevel :: struct {
 	parent: ^Toplevel,
 	title, app_id: string,
 	current, pending, scheduled: Toplevel_State,
-	requested: struct { maximized, minimized, fullscreen: bool, fullscreen_output: ^wlr.wlr_output },
-	geometry, pending_geometry, explicit_geometry: wlr.Box,
+	requested: struct { maximized, minimized, fullscreen: bool, fullscreen_output: ^out.Output },
+	geometry, pending_geometry, explicit_geometry: gles.Box,
 	geometry_changed: bool,
 	initialized, initial_commit, configured, capabilities_sent: bool,
 	min_width, min_height, max_width, max_height: i32,
@@ -125,7 +124,7 @@ xdg_request :: proc(r: ^wl.Resource, request: p.Xdg_Surface_Request, args: []wl.
 	case .set_window_geometry:
 		if x.popup != nil { popup_window_geometry(x.popup, args); return }
 		if t == nil { wl.post_error(r, u32(p.Xdg_Surface_Error.not_constructed), "surface has no role object"); return }
-		box := wlr.Box{i32(args[0].(wl.Int)), i32(args[1].(wl.Int)), i32(args[2].(wl.Int)), i32(args[3].(wl.Int))}
+		box := gles.Box{i32(args[0].(wl.Int)), i32(args[1].(wl.Int)), i32(args[2].(wl.Int)), i32(args[3].(wl.Int))}
 		if box.width <= 0 || box.height <= 0 { wl.post_error(r, u32(p.Xdg_Surface_Error.invalid_size), "geometry must have positive size"); return }
 		t.pending_geometry, t.geometry_changed = box, true
 	case .ack_configure:
@@ -177,7 +176,7 @@ xdg_geometry :: proc(x: ^Xdg_Surface) {
 	if box.width > 0 {
 		left, top := max(extents.x, box.x), max(extents.y, box.y)
 		right, bottom := min(extents.x+extents.width, box.x+box.width), min(extents.y+extents.height, box.y+box.height)
-		t.geometry = wlr.Box{left, top, max(0,right-left), max(0,bottom-top)}
+		t.geometry = gles.Box{left, top, max(0,right-left), max(0,bottom-top)}
 	}
 }
 xdg_reset :: proc(x: ^Xdg_Surface) {

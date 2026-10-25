@@ -1,13 +1,11 @@
 package compositor
 
+import gles "../gles"
 import sf "../surfaces"
-
 import xw "../xwayland"
-
 import sh "../shells"
 import "core:strings"
 
-import wlr "../wlroots"
 
 xdg :: proc(v: ^View) -> ^sh.Toplevel { t,_:=v.protocol.(^sh.Toplevel);return t }
 x11 :: proc(v: ^View) -> ^X11_View { x,_:=v.protocol.(^X11_View);return x }
@@ -29,7 +27,7 @@ view_app_text :: proc(v: ^View) -> cstring {
 view_override_redirect :: proc(v: ^View) -> bool {
     x:=x11(v);return x!=nil && x.handle.override_redirect
 }
-view_geometry :: proc(v: ^View) -> wlr.wlr_box {
+view_geometry :: proc(v: ^View) -> gles.Box {
     if t:=xdg(v);t!=nil { return t.geometry }
     if surface:=view_surface(v);surface!=nil { return {width=surface.current.width,height=surface.current.height} }
     return {}

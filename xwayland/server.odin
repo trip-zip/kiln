@@ -117,7 +117,7 @@ server_start :: proc(s: ^Server) -> bool {
 	s.wm_fd, s.ready_fd = wm[0], ready[0]; wm[0], ready[0] = -1, -1
 	s.ready_source = wl.loop_on_fd(s.display.loop, i32(s.ready_fd), {.Readable}, server_ready, s)
 	if s.ready_source == nil { return false }
-	executable := os.get_env("WLR_XWAYLAND", context.temp_allocator); if executable == "" { executable = "Xwayland" }
+	executable := os.get_env("KILN_XWAYLAND", context.temp_allocator); if executable == "" { executable = "Xwayland" }
 	argv := [17]cstring{cstr(executable), cstr(s.display_name), "-rootless", "-core", "-terminate", "10", "-listenfd", cstr(fmt.tprintf("%d",s.sockets[0])), "-listenfd", cstr(fmt.tprintf("%d",s.sockets[1])), "-displayfd", cstr(fmt.tprintf("%d",ready[1])), "-wm", cstr(fmt.tprintf("%d",wm[1])), "-noTouchPointerEmulation", "-force-xrandr-emulation", nil}
 	way_socket := cstr(fmt.tprintf("%d", way[1]))
 	s.started = wl.monotonic_ns()

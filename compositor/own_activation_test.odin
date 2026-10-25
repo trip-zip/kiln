@@ -57,10 +57,10 @@ owned_activation_mints_serial_validation_and_single_use :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(s.events), 0)
 	old_enter := extension_focus(s, &a)
 	serial := old_enter
-	// Interleaved clients exhaust wlroots' bounded serial history with actual enter events.
+	// Interleaved clients exhaust the bounded serial history with actual enter events.
 	for _ in 0..<130 { extension_focus(s, &b); serial = extension_focus(s, &a) }
 	seat_client := ext.seat_client_of(wl.client_get_object(a.client, 3))
-	// A full wlroots ring deliberately accepts evicted serials; only half-range age is unambiguously stale.
+	// A full serial ring deliberately accepts evicted serials; only half-range age is unambiguously stale.
 	testing.expect(t, st.valid_serial(seat_client, old_enter))
 	stale := serial-0x80000000
 	testing.expect(t, !st.valid_serial(seat_client, stale))
@@ -96,7 +96,7 @@ owned_activation_mints_serial_validation_and_single_use :: proc(t: ^testing.T) {
 	testing.expect(t, s.events[0].name == "request::activate" && s.events[0].handle == 77 && !s.events[0].valid)
 	extension_clear_events(s)
 	testing.expect_value(t, len(s.activation.tokens), 0)
-	fmt.println("Activation: trusted and serial-validated tokens activate; no-seat token reaches request::activate with valid=false; half-range-stale token rejected; replay rejected; evicted serial acceptance matches wlroots")
+	fmt.println("Activation: trusted and serial-validated tokens activate; no-seat token reaches request::activate with valid=false; half-range-stale token rejected; replay rejected; evicted serial acceptance preserves bounded history semantics")
 }
 
 @(test)

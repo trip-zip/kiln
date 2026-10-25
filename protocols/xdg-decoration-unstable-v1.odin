@@ -96,13 +96,13 @@ Zxdg_Toplevel_Decoration_V1_Mode :: enum u32 {
 	server_side = 2,
 }
 
-xdg_decoration_unstable_v1_interfaces := [?]^wl.Interface{
+zxdg_decoration_unstable_v1_interfaces := [?]^wl.Interface{
 	&zxdg_decoration_manager_v1,
 	&zxdg_toplevel_decoration_v1,
 }
 
 @(init, private)
-xdg_decoration_unstable_v1_init_types :: proc "contextless"() {
+zxdg_decoration_unstable_v1_init_types :: proc "contextless"() {
 	zxdg_decoration_manager_v1_request_get_toplevel_decoration_types[0] = &zxdg_toplevel_decoration_v1
 	zxdg_decoration_manager_v1_request_get_toplevel_decoration_types[1] = &xdg_toplevel
 }

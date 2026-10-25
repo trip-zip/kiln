@@ -1,12 +1,11 @@
 package compositor
 
+import gles "../gles"
 import sf "../surfaces"
-
 import p "../protocols"
 import sp "../scene_paint"
 import sh "../shells"
 import wl "../wayland"
-import wlr "../wlroots"
 import "core:testing"
 
 popup_test_parent :: proc(t: ^testing.T, c: ^Extension_Client) {
@@ -101,7 +100,7 @@ owned_popups_reposition_nested_coordinates_and_no_configure_loop :: proc(t: ^tes
 	testing.expect(t, len(s.popups) == 1 && !s.popups[0].handle.initialized)
 	popup_test_map(t, &c, 11, 12)
 	first := s.popups[0].handle
-	testing.expect_value(t, first.current.geometry, wlr.Box{30, 30, 64, 48})
+	testing.expect_value(t, first.current.geometry, gles.Box{30, 30, 64, 48})
 	testing.expect(t, s.popups[0].mapped && s.popups[0].root == s.views[0].id)
 	popup_test_create(&c, 14, 15, 16, 12); popup_test_map(t, &c, 14, 15)
 	second := s.popups[1].handle
@@ -123,7 +122,7 @@ owned_popups_reposition_nested_coordinates_and_no_configure_loop :: proc(t: ^tes
 		uintptr(raw_data(configure)) < uintptr(raw_data(surface_configure)),
 	)
 	sh.popup_constrain(second, {0, 0, 400, 300}, false)
-	testing.expect_value(t, second.scheduled.geometry, wlr.Box{296, 212, 64, 48})
+	testing.expect_value(t, second.scheduled.geometry, gles.Box{296, 212, 64, 48})
 	events = extension_pump(&c)
 	extension_send(
 		&c,

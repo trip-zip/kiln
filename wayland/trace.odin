@@ -26,6 +26,8 @@ trace :: proc(resource: ^Resource, message: ^Message, args: []Argument, send: bo
 		case New_Id:
 			iface := message.types[index]
 			at += len(fmt.bprintf(buffer[at:], "new id %s#%d", string(iface.name) if iface != nil else "[unknown]", value))
+		case Proxy_Object:
+			if value == nil { at += len(fmt.bprintf(buffer[at:], "nil")) } else { at += len(fmt.bprintf(buffer[at:], "%s#%d", value.interface.name, value.id)) }
 		case Array: at += len(fmt.bprintf(buffer[at:], "array[%d]", value.size))
 		case Fd: at += len(fmt.bprintf(buffer[at:], "fd %d", value))
 		}

@@ -1,20 +1,15 @@
 package compositor
 
+import out "../outputs"
 import sf "../surfaces"
-
 import st "../seat"
-
 import sh "../shells"
-
 import ext "../extensions"
-
 import sp "../scene_paint"
-
 import images "../images"
 import layout "../layout"
 import vm "../lua_runtime"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:fmt"
 
@@ -27,7 +22,7 @@ View :: struct {
 	allocator:                                                                               runtime.Allocator,
 	mapped:                                                                                  bool,
 	foreign_handle:                                                                          ^ext.Foreign_Handle,
-	foreign_output:                                                                          ^wlr.wlr_output,
+	foreign_output:                                                                          ^out.Output,
 	foreign_title,
 	foreign_app:                                                              string,
 	foreign_allocator:                                                                       runtime.Allocator,

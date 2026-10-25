@@ -6,9 +6,10 @@ Int :: distinct i32
 Uint :: distinct u32
 String :: struct { value: string, is_null: bool }
 Object :: distinct ^Resource
+Proxy_Object :: distinct ^Proxy
 New_Id :: distinct u32
 Fd :: distinct i32
-Argument :: union { Int, Uint, Fixed, String, Object, New_Id, Array, Fd }
+Argument :: union { Int, Uint, Fixed, String, Object, Proxy_Object, New_Id, Array, Fd }
 Signature :: struct { text: string, cursor: int }
 argument_next :: proc(s: ^Signature) -> (kind: u8, nullable, ok: bool) {
 	for s.cursor < len(s.text) {
@@ -55,6 +56,11 @@ encode :: proc(id, opcode: u32, message: ^Message, args: []Argument, bytes: []u8
 		case 'u': v, good := arg.(Uint); assert(good); value = u32(v)
 		case 'f': v, good := arg.(Fixed); assert(good); value = u32(v)
 		case 'o', 'n':
+			if v, good := arg.(Proxy_Object); good {
+				assert(v != nil || nullable && kind == 'o')
+				if v != nil { value = v.id }
+				break
+			}
 			v, good := arg.(Object); assert(good)
 			assert(v != nil || nullable && kind == 'o')
 			if v != nil { value = v.id }
@@ -85,7 +91,7 @@ encode :: proc(id, opcode: u32, message: ^Message, args: []Argument, bytes: []u8
 }
 Resolve :: #type proc(u32, rawptr) -> ^Resource
 Reserve :: #type proc(u32, rawptr) -> bool
-unmarshal :: proc(c: ^Connection, bytes: []u8, message: ^Message, args: ^[20]Argument, resolve: Resolve, reserve: Reserve, data: rawptr) -> (count: int, ok: bool) {
+unmarshal :: proc(c: ^Connection, bytes: []u8, message: ^Message, args: ^[20]Argument, resolve: Resolve, reserve: Reserve, data: rawptr, resolve_proxy: proc(u32, rawptr) -> ^Proxy = nil) -> (count: int, ok: bool) {
 	signature := Signature{text = string(message.signature)}
 	at := 8
 	defer if !ok {
@@ -120,6 +126,14 @@ unmarshal :: proc(c: ^Connection, bytes: []u8, message: ^Message, args: ^[20]Arg
 			at += int(padded)
 		case 'o':
 			if value == 0 && !nullable { return }
+			if resolve_proxy != nil {
+				object := resolve_proxy(value, data)
+				if value != 0 && object == nil { return }
+				iface := message.types[index]
+				if object != nil && iface != nil && !interface_equal(object.interface, iface) { return }
+				args[index] = Proxy_Object(object)
+				break
+			}
 			object: ^Resource
 			if value != 0 { object = resolve(value, data); if object == nil { return } }
 			iface := message.types[index]

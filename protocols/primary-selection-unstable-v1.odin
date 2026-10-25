@@ -156,7 +156,7 @@ zwp_primary_selection_source_v1: wl.Interface = {
 	2, &zwp_primary_selection_source_v1_events[0],
 }
 
-wp_primary_selection_unstable_v1_interfaces := [?]^wl.Interface{
+zwp_primary_selection_unstable_v1_interfaces := [?]^wl.Interface{
 	&zwp_primary_selection_device_manager_v1,
 	&zwp_primary_selection_device_v1,
 	&zwp_primary_selection_offer_v1,
@@ -164,7 +164,7 @@ wp_primary_selection_unstable_v1_interfaces := [?]^wl.Interface{
 }
 
 @(init, private)
-wp_primary_selection_unstable_v1_init_types :: proc "contextless"() {
+zwp_primary_selection_unstable_v1_init_types :: proc "contextless"() {
 	zwp_primary_selection_device_manager_v1_request_create_source_types[0] = &zwp_primary_selection_source_v1
 	zwp_primary_selection_device_manager_v1_request_get_device_types[0] = &zwp_primary_selection_device_v1
 	zwp_primary_selection_device_manager_v1_request_get_device_types[1] = &wl_seat

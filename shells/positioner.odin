@@ -1,12 +1,12 @@
 package shells
 
+import gles "../gles"
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 
 Positioner_Rules :: struct {
 	width, height:               i32,
-	anchor_rect:                 wlr.Box,
+	anchor_rect:                 gles.Box,
 	anchor, gravity, adjustment: u32,
 	offset_x, offset_y:          i32,
 	reactive:                    bool,
@@ -43,7 +43,7 @@ positioner_request :: proc(
 			   0 {wl.post_error(r, u32(p.Xdg_Positioner_Error.invalid_input), "size must be positive"); return}
 		v.width, v.height = width, height
 	case .set_anchor_rect:
-		box := wlr.Box {
+		box := gles.Box {
 			i32(args[0].(wl.Int)),
 			i32(args[1].(wl.Int)),
 			i32(args[2].(wl.Int)),
@@ -96,7 +96,7 @@ positioner_coordinate :: proc(start, extent, size, offset, anchor, gravity: i32)
 	if gravity == 0 {point -= size / 2} else if gravity < 0 {point -= size}
 	return point
 }
-positioner_geometry :: proc(r: Positioner_Rules) -> wlr.Box {
+positioner_geometry :: proc(r: Positioner_Rules) -> gles.Box {
 	return {
 		positioner_coordinate(
 			r.anchor_rect.x,
@@ -118,7 +118,7 @@ positioner_geometry :: proc(r: Positioner_Rules) -> wlr.Box {
 		r.height,
 	}
 }
-positioner_unconstrain :: proc(r: Positioner_Rules, constraint: wlr.Box) -> wlr.Box {
+positioner_unconstrain :: proc(r: Positioner_Rules, constraint: gles.Box) -> gles.Box {
 	box := positioner_geometry(r)
 	for vertical in ([2]bool{false, true}) {
 		pos, size, start, extent := box.x, box.width, constraint.x, constraint.width

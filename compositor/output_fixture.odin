@@ -1,5 +1,9 @@
 package compositor
 
+import bk "../backend"
+_ :: bk
+
+import out "../outputs"
 import layout "../layout"
 import readback "../readback"
 import "base:runtime"
@@ -9,12 +13,12 @@ _ :: runtime
 import vm "../lua_runtime"
 import sp "../scene_paint"
 import wl "../wayland"
-import wlr "../wlroots"
 _ :: vm
 _ :: wl
 _ :: sp
 
 when #config(KILN_OUTPUT_FIXTURE, false) {
+	fixture_reject_impl: out.Impl
 	fixture_server: ^Server
 	fixture_name: cstring
 	// Read-only counts let the private harness compare settled live ownership.
@@ -134,17 +138,8 @@ when #config(KILN_OUTPUT_FIXTURE, false) {
 		return -1
 	}
 	fixture_attach :: proc(s: rawptr) {fixture_server = (^Server)(s)}
-	fixture_name_output :: proc(output: ^wlr.wlr_output) {
-		if fixture_name != nil {wlr.wlr_output_set_name(output, fixture_name)}
-	}
-	Fixture_Backend :: struct {
-		headless, x11: ^wlr.wlr_backend,
-	}
-	fixture_backend :: proc "c" (backend: ^wlr.wlr_backend, data: rawptr) {
-		context = runtime.default_context()
-		f := (^Fixture_Backend)(data)
-		if wlr.wlr_backend_is_headless(backend) {f.headless = backend}
-		if wlr.wlr_backend_is_x11(backend) {f.x11 = backend}
+	fixture_name_output :: proc(output: ^out.Output) {
+		if fixture_name != nil {out.set_name(output, string(fixture_name))}
 	}
 	// Only the separately compiled private harness binary exports this entry point.
 	@(export)
@@ -178,36 +173,39 @@ when #config(KILN_OUTPUT_FIXTURE, false) {
 			return true
 		}
 		if action == 2 || action == 3 {
-			f: Fixture_Backend
-			wlr.wlr_multi_for_each_backend(s.backend, fixture_backend, &f)
 			if action == 2 {fixture_name = name}
 			defer fixture_name = nil
-			if action == 2 && f.headless != nil && a > 0 &&
-			   b > 0 {return wlr.wlr_headless_add_output(f.headless, u32(a), u32(b)) != nil}
-			if action == 3 && f.x11 != nil {return wlr.wlr_x11_output_create(f.x11) != nil}
+			if action == 2 && a > 0 && b > 0 { return bk.headless_add_output(s.backend,u32(a),u32(b)) != nil }
+			if action == 3 { return bk.nested_add_output(s.backend) != nil }
 			return false
 		}
 		for o in s.outputs {
 			if string(o.handle.name) != string(name) {continue}
 			switch action {
+			case 10:
+				fixture_reject_impl = o.handle.impl^
+				fixture_reject_impl.commit = proc(_: ^out.Output, _: ^out.State) -> bool { return false }
+				o.handle.impl = &fixture_reject_impl
+				dirty(o)
+				return true
 			case 0:
 				if a < 0 || a > 7 {return false}
-				state: wlr.wlr_output_state
-				wlr.wlr_output_state_init(&state)
-				defer wlr.wlr_output_state_finish(&state)
-				wlr.wlr_output_state_set_transform(&state, a)
+				state: out.State
+				out.state_init(&state)
+				defer out.state_finish(&state)
+				out.set_transform(&state, a)
 				return commit_output(o, &state)
 			case 1:
-				wlr.wlr_output_destroy(o.handle)
+				out.finish(o.handle)
 				return true
 			case 4:
 				// Deterministic queued-input race through the real callback;
 				// the output/device dies before the idle dispatcher runs.
 				found := false
 				for p in s.pointers {
-					pointer := wlr.wlr_pointer_from_input_device(p.device)
+					pointer := bk.pointer_of(p.device)
 					if pointer_output(s, pointer) != o.lifetime {continue}
-					event := wlr.wlr_pointer_motion_absolute_event {
+					event := bk.Motion_Absolute_Event {
 						pointer   = pointer,
 						time_msec = 424242,
 						x         = .9,
@@ -218,7 +216,7 @@ when #config(KILN_OUTPUT_FIXTURE, false) {
 					break
 				}
 				if !found {return false}
-				wlr.wlr_output_destroy(o.handle)
+				out.finish(o.handle)
 				return true
 			}
 		}
@@ -226,5 +224,5 @@ when #config(KILN_OUTPUT_FIXTURE, false) {
 	}
 } else {
 	fixture_attach :: proc(s: rawptr) {}
-	fixture_name_output :: proc(output: ^wlr.wlr_output) {}
+	fixture_name_output :: proc(output: ^out.Output) {}
 }

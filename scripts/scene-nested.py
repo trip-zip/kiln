@@ -21,7 +21,7 @@ evaluate = capture.evaluate
 
 
 def handles(sock):
-    return set(evaluate(sock, "local t={};for _,c in ipairs(client.all()) do if c.app_id=='wlroots' then t[#t+1]=c.handle end end;return table.concat(t,',')").strip().split(',')) - {''}
+    return set(evaluate(sock, "local t={};for _,c in ipairs(client.all()) do if c.app_id=='kiln' then t[#t+1]=c.handle end end;return table.concat(t,',')").strip().split(',')) - {''}
 
 
 def reveal(sock, handle):
@@ -55,13 +55,12 @@ screen.on('added',function(s)
 end)
 """)
     sock = out / 'eval.sock'
-    env = dict(os.environ, KILN_TEST_BACKEND='nested', WLR_BACKENDS='wayland',
+    env = dict(os.environ, KILN_TEST_BACKEND='nested', KILN_BACKEND='nested',
                WAYLAND_DISPLAY=args.parent_display, XDG_RUNTIME_DIR=str(runtime),
                KILN_SOCK=str(sock), KILN_PAINT_DEBUG='1', KILN_RC=str(config),
                HOME=str(out/'home'), XDG_CONFIG_HOME=str(out/'config'),
                XDG_CACHE_HOME=str(out/'cache'), XDG_DATA_HOME=str(out/'data'),
                DBUS_SESSION_BUS_ADDRESS=f'unix:path={runtime}/absent')
-    env.pop('WLR_RENDERER', None)
     processes, logs = [], []
 
     def launch(command, name, child_env):
@@ -81,7 +80,7 @@ end)
         reveal(args.parent_sock, next(iter(new)))
         wait_for(lambda: sock.exists() and 'First frame committed' in (out/'kiln.log').read_text(), [kiln])
         child_env = dict(env, WAYLAND_DISPLAY=f'kiln-{kiln.pid}')
-        child_env.pop('WLR_BACKENDS', None)
+        child_env.pop('KILN_BACKEND', None)
         bar = launch([str(args.layer_client), '--namespace', 'own-scene-bar', '--keyboard', 'none',
                       '--anchor', 'top,left,right', '--size', '0,32', '--exclusive-zone', '32',
                       '--color', 'ff358879', '--configure-report', str(out/'bar-size.txt')], 'bar', child_env)

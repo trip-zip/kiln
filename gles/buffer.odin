@@ -1,6 +1,7 @@
 package gles
 
 import "../gbm"
+import wl "../wayland"
 import "core:sys/posix"
 import gl "vendor:OpenGL"
 import egl "vendor:egl"
@@ -15,9 +16,9 @@ Buffer :: struct {
 	width, height: i32,
 	format:        u32,
 	modifier:      u64,
-	owner:         rawptr,
-	available:     bool,
-	release:       proc(b: ^Buffer),
+	locks:         int,
+	dropped:       bool,
+	events:        struct { retire, destroy: wl.Signal },
 }
 
 Swapchain :: struct {
@@ -44,8 +45,8 @@ buffer_create :: proc(r: ^Renderer, width, height: i32, format: u32, mods: []u64
 		height    = height,
 		format    = format,
 		modifier  = gbm.modifier(bo),
-		available = true,
 	}
+	wl.signal_init(&b.events.retire); wl.signal_init(&b.events.destroy)
 	for &p in b.planes {p.fd = -1}
 	if len(mods) == 1 && mods[0] == gbm.INVALID {b.modifier = gbm.INVALID}
 	ok := false
@@ -71,7 +72,9 @@ buffer_create :: proc(r: ^Renderer, width, height: i32, format: u32, mods: []u64
 
 buffer_destroy :: proc(b: ^Buffer) {
 	if b == nil {return}
+	assert(b.locks == 0)
 	context.allocator = b.renderer.allocator
+	wl.signal_emit_final(&b.events.destroy,b)
 	if current(b.renderer) {
 		gl.DeleteFramebuffers(1, &b.fbo)
 		gl.DeleteRenderbuffers(1, &b.rbo)
@@ -86,7 +89,7 @@ buffer_destroy :: proc(b: ^Buffer) {
 
 swapchain_finish :: proc(s: ^Swapchain) {
 	for b in s.buffers {
-		if b.release != nil {b.release(b)} else {buffer_destroy(b)}
+		buffer_drop(b)
 	}
 	delete(s.buffers)
 	delete(s.modifiers)
@@ -121,16 +124,15 @@ acquire :: proc(
 		copy(s.modifiers, mods)
 	}
 	for b in s.buffers {
-		if b.available {
-			b.available = false
-			return b
+		if b.locks == 0 {
+			return buffer_retain(b)
 		}
 	}
 	if len(s.buffers) >= 3 {return nil}
 	b := buffer_create(r, width, height, format, mods)
 	if b != nil {
 		append(&s.buffers, b)
-		b.available = false
+		buffer_retain(b)
 	}
 	return b
 }
@@ -166,4 +168,15 @@ read_region :: proc(r: ^Renderer, b: ^Buffer, dest: rawptr, stride: u32, box: Bo
 		}
 	}
 	return true
+}
+
+buffer_retain :: proc(b: ^Buffer) -> ^Buffer { if b != nil { b.locks += 1 }; return b }
+buffer_release :: proc(b: ^Buffer) {
+	if b == nil { return }; assert(b.locks > 0); b.locks -= 1
+	if b.locks == 0 && b.dropped { buffer_destroy(b) }
+}
+buffer_drop :: proc(b: ^Buffer) {
+	assert(!b.dropped)
+	wl.signal_emit_final(&b.events.retire,b)
+	b.dropped = true; if b.locks == 0 { buffer_destroy(b) }
 }

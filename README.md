@@ -9,8 +9,9 @@ Documentation, including the Lua API, is at [somewm.org/kiln](https://somewm.org
 
 ## Build
 
-Needs Odin (nightly), GNU make, gcc and ar, plus wlroots 0.20, LuaJIT 2.1,
-cairo, pango, gdk-pixbuf, libsystemd, PAM and xcb. Clay is vendored.
+Needs Odin (nightly), GNU make, gcc and ar, plus LuaJIT 2.1, Mesa (EGL,
+GLES and GBM), libinput, xkbcommon, libsystemd, cairo, pango, gdk-pixbuf,
+PAM and xcb. Clay is vendored. Xwayland is optional, for X clients.
 
 ```sh
 make

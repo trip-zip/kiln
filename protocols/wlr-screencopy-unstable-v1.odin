@@ -123,13 +123,13 @@ Zwlr_Screencopy_Frame_V1_Flags_Bit :: enum u8 {
 	y_invert = 0,
 }
 
-wlr_screencopy_unstable_v1_interfaces := [?]^wl.Interface{
+zwlr_screencopy_unstable_v1_interfaces := [?]^wl.Interface{
 	&zwlr_screencopy_manager_v1,
 	&zwlr_screencopy_frame_v1,
 }
 
 @(init, private)
-wlr_screencopy_unstable_v1_init_types :: proc "contextless"() {
+zwlr_screencopy_unstable_v1_init_types :: proc "contextless"() {
 	zwlr_screencopy_manager_v1_request_capture_output_types[0] = &zwlr_screencopy_frame_v1
 	zwlr_screencopy_manager_v1_request_capture_output_types[2] = &wl_output
 	zwlr_screencopy_manager_v1_request_capture_output_region_types[0] = &zwlr_screencopy_frame_v1

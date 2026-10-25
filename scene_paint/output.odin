@@ -1,9 +1,8 @@
 package scene_paint
 
+import out "../outputs"
 import sf "../surfaces"
-
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:fmt"
 import "core:os"
@@ -12,20 +11,20 @@ import "../gles"
 
 Output :: struct {
 	scene:                    ^Scene,
-	handle:                   ^wlr.wlr_output,
+	handle:                   ^out.Output,
 	renderer:                 ^gles.Renderer,
-	layout:                   ^wlr.wlr_output_layout,
+	layout:                   ^out.Layout,
 	parts:                    [dynamic]Part,
-	damage:                   [dynamic]wlr.Box,
+	damage:                   [dynamic]gles.Box,
 	history:                  [dynamic]^Buffer_History,
-	last:                     ^wlr.Render_Buffer,
+	last:                     ^gles.Buffer,
 	committed_at:             posix.timespec,
-	committed:                proc(^Output, []wlr.Box),
+	committed:                proc(^Output, []gles.Box),
 	commit:                   wl.Listener,
 	gamma:                    gles.Gamma,
 	swapchain:                gles.Swapchain,
 	cursor:                   Cursor,
-	bounds:                   wlr.Box,
+	bounds:                   gles.Box,
 	width, height, transform: i32,
 	scale:                    f32,
 	needs_frame:              wl.Listener,
@@ -37,9 +36,9 @@ Output :: struct {
 output_init :: proc(
 	o: ^Output,
 	scene: ^Scene,
-	handle: ^wlr.wlr_output,
+	handle: ^out.Output,
 	renderer: ^gles.Renderer,
-	layout: ^wlr.wlr_output_layout,
+	layout: ^out.Layout,
 ) {
 	o.scene, o.handle, o.renderer, o.layout = scene, handle, renderer, layout
 	o.trace = os.get_env("KILN_PAINT_DEBUG", context.temp_allocator) == "1"
@@ -49,7 +48,7 @@ output_init :: proc(
 	output_sync(o)
 }
 
-get_scene_output :: proc(scene: ^Scene, handle: ^wlr.wlr_output) -> ^Output {
+get_scene_output :: proc(scene: ^Scene, handle: ^out.Output) -> ^Output {
 	for o in scene.outputs {
 		if o.handle == handle {return o}
 	}
@@ -63,7 +62,7 @@ output_finish :: proc(o: ^Output) {
 	delete(o.subscriptions)
 	wl.unlisten(&o.needs_frame)
 	wl.unlisten(&o.commit)
-	if o.last != nil {wlr.buffer_release(o.last)}
+	if o.last != nil {gles.buffer_release(o.last)}
 	gles.swapchain_finish(&o.swapchain)
 	delete(o.parts)
 	delete(o.damage)
@@ -79,21 +78,19 @@ output_finish :: proc(o: ^Output) {
 	}
 }
 
-output_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+output_committed :: proc (listener: ^wl.Listener, data: rawptr) {
 	o := wl.owner(listener, Output, "commit")
-	e := cast(^wlr.wlr_output_event_commit)data
-	if e.state.committed & wlr.WLR_OUTPUT_STATE_BUFFER != 0 {
+	e := cast(^out.Commit_Event)data
+	if e.state.committed & {.Buffer} != {} {
 		previous := o.last
-		o.last = wlr.buffer_retain(e.state.buffer)
-		if previous != nil { wlr.buffer_release(previous) }
+		o.last = gles.buffer_retain(e.state.buffer)
+		if previous != nil { gles.buffer_release(previous) }
 		o.committed_at = e.when_
 	}
 }
 
-output_needed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
-	wlr.wlr_output_schedule_frame(wl.owner(listener, Output, "needs_frame").handle)
+output_needed :: proc (listener: ^wl.Listener, data: rawptr) {
+	out.schedule_frame(wl.owner(listener, Output, "needs_frame").handle)
 }
 
 output_invalidate :: proc(o: ^Output) {
@@ -101,15 +98,15 @@ output_invalidate :: proc(o: ^Output) {
 	damage_box(o, {0, 0, o.width, o.height})
 }
 
-damage_box :: proc(o: ^Output, box: wlr.Box) {
+damage_box :: proc(o: ^Output, box: gles.Box) {
 	if box.width <= 0 || box.height <= 0 {return}
 	append(&o.damage, box)
-	if o.handle != nil && o.handle.enabled {wlr.wlr_output_schedule_frame(o.handle)}
+	if o.handle != nil && o.handle.enabled {out.schedule_frame(o.handle)}
 }
 
 output_sync :: proc(o: ^Output) {
-	b: wlr.Box
-	wlr.wlr_output_layout_get_box(o.layout, o.handle, &b)
+	b: gles.Box
+	b = out.layout_box(o.layout, o.handle)
 	h := o.handle
 	if o.bounds != b || o.width != h.width || o.height != h.height || o.scale != h.scale ||
 	   o.transform != h.transform {
@@ -119,8 +116,8 @@ output_sync :: proc(o: ^Output) {
 	}
 }
 
-output_box :: proc(o: ^Output, box: wlr.Box) -> wlr.Box {
-	b := wlr.Box {
+output_box :: proc(o: ^Output, box: gles.Box) -> gles.Box {
+	b := gles.Box {
 		device_edge(box.x, o.scale),
 		device_edge(box.y, o.scale),
 		device_span(box.x, box.width, o.scale),
@@ -131,7 +128,7 @@ output_box :: proc(o: ^Output, box: wlr.Box) -> wlr.Box {
 	return gles.transform_box(b, gles.transform_invert(o.transform), tw, th)
 }
 
-coverage :: proc(p: Part) -> wlr.Box {
+coverage :: proc(p: Part) -> gles.Box {
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
 	box := p.box
 	if p.kind != .Client {return box}
@@ -151,7 +148,7 @@ damage_part :: proc(o: ^Output, p: Part) {
 	damage_box(o, output_box(o, coverage(p)))
 }
 
-client_damage :: proc(o: ^Output, id: u32, geometry: ^wlr.Box = nil) {
+client_damage :: proc(o: ^Output, id: u32, geometry: ^gles.Box = nil) {
 	if o == nil {return}
 	for &p in o.parts {
 		if p.kind == .Client && p.id == id {
@@ -166,13 +163,13 @@ draw_texture :: proc(
 	o: ^Output,
 	pass: ^gles.Pass,
 	texture: ^gles.Texture,
-	source: wlr.wlr_fbox,
-	box, clip: wlr.Box,
+	source: gles.FBox,
+	box, clip: gles.Box,
 	transform: i32,
-	repaint: []wlr.Box,
+	repaint: []gles.Box,
 ) -> bool {
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
-	boxes := make([dynamic]wlr.Box, context.temp_allocator)
+	boxes := make([dynamic]gles.Box, context.temp_allocator)
 	for damage in repaint {
 		b := intersection(damage, clip)
 		if b.width > 0 && b.height > 0 {append(&boxes, b)}
@@ -185,7 +182,7 @@ draw_texture :: proc(
 draw_parts :: proc(
 	o: ^Output,
 	pass: ^gles.Pass,
-	repaint: []wlr.Box,
+	repaint: []gles.Box,
 	drawn: ^[dynamic]^sf.Surface,
 ) -> bool {
 	transform := gles.transform_invert(o.transform)
@@ -224,7 +221,7 @@ draw_parts :: proc(
 				gles.transform_invert(v.surface.current.transform),
 				transform,
 			)
-			if !draw_texture( o, pass, texture, wlr.wlr_fbox(sf.source_box(v.surface)), box, visible, t, repaint, ) {
+			if !draw_texture( o, pass, texture, gles.FBox(sf.source_box(v.surface)), box, visible, t, repaint, ) {
 				return false
 			}
 			append(drawn, v.surface)
@@ -238,23 +235,23 @@ output_commit :: proc(o: ^Output) -> bool {
 	context.allocator = o.scene.allocator
 	output_sync(o)
 	if len(o.damage) == 0 && !o.handle.needs_frame {return true}
-	state: wlr.wlr_output_state
-	wlr.wlr_output_state_init(&state)
-	defer wlr.wlr_output_state_finish(&state)
+	state: out.State
+	out.state_init(&state)
+	defer out.state_finish(&state)
 	if len(o.damage) == 0 && o.last != nil {
-		wlr.output_buffer(&state, o.last)
+		out.set_buffer(&state, o.last)
 		if !commit_target(o, &state) { return false }
 		if o.committed != nil { o.committed(o, nil) }
 		return true
 	}
 	buffer := acquire_target(o, o.width, o.height)
 	if buffer == nil {return false}
-	defer wlr.buffer_release(buffer)
+	defer gles.buffer_release(buffer)
 	history_prune(o)
 	history := history_acquire(o, buffer)
 	pending := history_repaint(history)
 	repaint := repaint_union(pending[:], {0, 0, o.width, o.height})
-	pass, begun := gles.begin(target_buffer(buffer), o.gamma)
+	pass, begun := gles.begin(buffer, o.gamma)
 	if !begun {return false}
 	for box in repaint {gles.clear(&pass, box)}
 	drawn_surfaces := make([dynamic]^sf.Surface, context.temp_allocator)
@@ -268,7 +265,7 @@ output_commit :: proc(o: ^Output) -> bool {
 		output_invalidate(o)
 		return false
 	}
-	wlr.output_buffer(&state, buffer)
+	out.set_buffer(&state, buffer)
 	if !commit_target(o, &state) {
 		output_invalidate(o)
 		return false
@@ -284,7 +281,7 @@ output_commit :: proc(o: ^Output) -> bool {
 	return true
 }
 
-set_gamma :: proc(s: ^Scene, output: ^wlr.wlr_output, table: []u16) -> bool {
+set_gamma :: proc(s: ^Scene, output: ^out.Output, table: []u16) -> bool {
 	o := get_scene_output(s, output)
 	if o == nil { return false }
 	if !gles.gamma_update(o.renderer, &o.gamma, table) { return false }

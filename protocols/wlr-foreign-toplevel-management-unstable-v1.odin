@@ -161,13 +161,13 @@ Zwlr_Foreign_Toplevel_Handle_V1_Error :: enum u32 {
 	invalid_rectangle = 0,
 }
 
-wlr_foreign_toplevel_management_unstable_v1_interfaces := [?]^wl.Interface{
+zwlr_foreign_toplevel_management_unstable_v1_interfaces := [?]^wl.Interface{
 	&zwlr_foreign_toplevel_manager_v1,
 	&zwlr_foreign_toplevel_handle_v1,
 }
 
 @(init, private)
-wlr_foreign_toplevel_management_unstable_v1_init_types :: proc "contextless"() {
+zwlr_foreign_toplevel_management_unstable_v1_init_types :: proc "contextless"() {
 	zwlr_foreign_toplevel_manager_v1_event_toplevel_types[0] = &zwlr_foreign_toplevel_handle_v1
 	zwlr_foreign_toplevel_handle_v1_request_activate_types[0] = &wl_seat
 	zwlr_foreign_toplevel_handle_v1_request_set_rectangle_types[0] = &wl_surface

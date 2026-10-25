@@ -1,13 +1,13 @@
 package seat
 
+import bk "../backend"
 import wl "../wayland"
-import wlr "../wlroots"
 import keys "../keymap"
 import "core:testing"
 
 @(test)
 keyboard_backend_events_own_state_and_ignore_duplicate_transitions :: proc(t: ^testing.T) {
-	backend: wlr.wlr_keyboard
+	backend: bk.Keyboard
 	wl.signal_init(&backend.events.key); wl.signal_init(&backend.base.events.destroy)
 	a,b: Keyboard
 	keyboard_init(&a,&backend); keyboard_init(&b,nil)
@@ -23,7 +23,7 @@ keyboard_backend_events_own_state_and_ignore_duplicate_transitions :: proc(t: ^t
 	wl.listen(&a.events.modifiers,&probe.mods,proc(l: ^wl.Listener,data: rawptr) { wl.owner(l,Probe,"mods").changed = true })
 	wl.listen(&a.events.destroy,&probe.destroy,proc(l: ^wl.Listener,data: rawptr) { wl.owner(l,Probe,"destroy").destroyed = true })
 	defer wl.unlisten(&probe.key); defer wl.unlisten(&probe.mods); defer wl.unlisten(&probe.destroy)
-	press := wlr.wlr_keyboard_key_event{keycode=42,state=1}
+	press := bk.Key_Event{keycode=42,state=1}
 	wl.signal_emit_mutable(&backend.events.key,&press)
 	wl.signal_emit_mutable(&backend.events.key,&press)
 	testing.expect(t,probe.changed && probe.before == 2 && len(a.keycodes) == 1)
@@ -51,13 +51,13 @@ seat_serial_window_uses_display_counter_and_wraps :: proc(t: ^testing.T) {
 
 @(test)
 keyboard_leds_follow_xkb_lock_transitions :: proc(t: ^testing.T) {
-	backend: wlr.wlr_keyboard
+	backend: bk.Keyboard
 	wl.signal_init(&backend.events.key); wl.signal_init(&backend.base.events.destroy)
 	kb: Keyboard; keyboard_init(&kb,&backend); defer keyboard_finish(&kb)
 	km,ok:=keys.create_default(); assert(ok); defer keys.destroy(km)
 	assert(keyboard_set_keymap(&kb,km))
 	for code,bit in ([2]u32{58,69}) {
-		e:=wlr.wlr_keyboard_key_event{keycode=code,state=1}
+		e:=bk.Key_Event{keycode=code,state=1}
 		keyboard_update_key(&kb,&e); e.state=0; keyboard_update_key(&kb,&e)
 		testing.expect(t,kb.leds&(2 if bit==0 else 1) != 0)
 		e.state=1; keyboard_update_key(&kb,&e); e.state=0; keyboard_update_key(&kb,&e)

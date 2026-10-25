@@ -1,12 +1,11 @@
 package scene_paint
 
+import gles "../gles"
 import sf "../surfaces"
-
 import rg "../region"
 import sh "../shells"
 import wl "../wayland"
 import raw "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:testing"
 
@@ -23,14 +22,14 @@ flat_publication_damages_old_and_new_device_boxes :: proc(t: ^testing.T) {
 		{kind = .Solid, box = {60, 20, 30, 40}, color = {0, 1, 0, 1}, key = 2},
 	}
 	testing.expect_value(t, publish(&o, parts[:]), 2)
-	testing.expect_value(t, o.damage[0], wlr.Box{20, 40, 60, 80})
+	testing.expect_value(t, o.damage[0], gles.Box{20, 40, 60, 80})
 	clear(&o.damage)
 	testing.expect_value(t, publish(&o, parts[:]), 0)
 	testing.expect_value(t, len(o.damage), 0)
 	parts[0].box.x = 15
 	testing.expect_value(t, publish(&o, parts[:]), 1)
-	testing.expect_value(t, o.damage[0], wlr.Box{20, 40, 60, 80})
-	testing.expect_value(t, o.damage[len(o.damage) - 1], wlr.Box{30, 40, 60, 80})
+	testing.expect_value(t, o.damage[0], gles.Box{20, 40, 60, 80})
+	testing.expect_value(t, o.damage[len(o.damage) - 1], gles.Box{30, 40, 60, 80})
 	parts[0], parts[1] = parts[1], parts[0]
 	testing.expect_value(t, publish(&o, parts[:]), 2)
 	testing.expect_value(t, o.parts[0].key, 2)
@@ -111,8 +110,8 @@ client_hit_resolves_current_subsurfaces_without_raster_picking :: proc(t: ^testi
 	parent, child: sf.Surface
 	fixture_surface(&parent)
 	fixture_surface(&child)
-	testing.expect(t, test_region_begin(&parent.input_region, []wlr.Box{{0, 0, 80, 60}}))
-	testing.expect(t, test_region_begin(&child.input_region, []wlr.Box{{0, 0, 20, 20}}))
+	testing.expect(t, test_region_begin(&parent.input_region, []gles.Box{{0, 0, 80, 60}}))
+	testing.expect(t, test_region_begin(&child.input_region, []gles.Box{{0, 0, 20, 20}}))
 	defer test_region_finish(&parent.input_region)
 	defer test_region_finish(&child.input_region)
 	sub := sf.Subsurface {
@@ -144,7 +143,7 @@ later_parts_cannot_occlude_client_popups :: proc(t: ^testing.T) {
 	fixture_surface(&popup_surface)
 	fixture_surface(&later)
 	for surface in ([]^sf.Surface{&parent, &popup_surface, &later}) {
-		testing.expect(t, test_region_begin(&surface.input_region, []wlr.Box{{0, 0, 80, 60}}))
+		testing.expect(t, test_region_begin(&surface.input_region, []gles.Box{{0, 0, 80, 60}}))
 	}
 	defer for surface in ([]^sf.Surface{&parent,&popup_surface,&later}) { test_region_finish(&surface.input_region) }
 	base := new(sh.Xdg_Surface); base.surface = &parent
@@ -180,7 +179,7 @@ later_parts_cannot_occlude_client_popups :: proc(t: ^testing.T) {
 	clear(&o.damage)
 	popup_surface.mapped = false
 	client_damage(&o, 7)
-	testing.expect_value(t, o.damage[0], wlr.Box{30, 40, 90, 75})
+	testing.expect_value(t, o.damage[0], gles.Box{30, 40, 90, 75})
 	items = draw_order(&o)
 	testing.expect_value(t, len(items), 3)
 	surface, id, _, _ = client_at(&o, 45, 60)
@@ -198,18 +197,18 @@ reacquired_buffer_repaints_only_damage_since_presentation :: proc(t: ^testing.T)
 		height = 80,
 	}
 	defer output_finish(&o)
-	a, b: wlr.Render_Buffer
+	a, b: gles.Buffer
 	wl.init(&a.events.destroy.listener_list)
 	wl.init(&b.events.destroy.listener_list)
 	first := history_acquire(&o, &a)
 	boxes := history_repaint(first)
 	testing.expect_value(t, len(boxes), 1)
-	testing.expect_value(t, boxes[0], wlr.Box{0, 0, 100, 80})
+	testing.expect_value(t, boxes[0], gles.Box{0, 0, 100, 80})
 	history_presented(first)
 	second := history_acquire(&o, &b)
-	box1 := wlr.Box{5, 7, 10, 12}
-	box2 := wlr.Box{12, 10, 9, 8}
-	box3 := wlr.Box{70, 60, 4, 3}
+	box1 := gles.Box{5, 7, 10, 12}
+	box2 := gles.Box{12, 10, 9, 8}
+	box3 := gles.Box{70, 60, 4, 3}
 	append(&o.damage, box1)
 	history_presented(second)
 	clear(&o.damage)
@@ -255,6 +254,6 @@ reacquired_buffer_repaints_only_damage_since_presentation :: proc(t: ^testing.T)
 }
 
 test_region_finish :: rg.finish
-test_region_begin :: proc(region: ^rg.Region, boxes: []wlr.Box) -> bool {
+test_region_begin :: proc(region: ^rg.Region, boxes: []gles.Box) -> bool {
  for b in boxes { rg.union_rect(region,rg.Box(b)) }; return true
 }

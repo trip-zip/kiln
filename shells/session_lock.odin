@@ -1,10 +1,9 @@
 package shells
 
+import out "../outputs"
 import sf "../surfaces"
-
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 
 Lock_Manager :: struct {
@@ -30,7 +29,7 @@ Lock_Configure :: struct {
 Lock_Surface :: struct {
 	resource:                    ^wl.Resource,
 	lock:                        ^Lock,
-	output:                      ^wlr.wlr_output,
+	output:                      ^out.Output,
 	surface:                     ^sf.Surface,
 	current, pending, scheduled: Lock_Configure,
 	queue:                       [dynamic]Lock_Configure,

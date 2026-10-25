@@ -1,12 +1,12 @@
 package compositor
 
+import gles "../gles"
+import bk "../backend"
+import out "../outputs"
 import sf "../surfaces"
-
 import st "../seat"
-
 import sp "../scene_paint"
 import wl "../wayland"
-import wlr "../wlroots"
 import "core:math"
 
 cursor_sync :: proc(s: ^Server) {
@@ -67,17 +67,17 @@ cursor_position :: proc(s: ^Server, x, y: f64) {
 	lx := s.cursor_x if math.is_nan(x) else x
 	ly := s.cursor_y if math.is_nan(y) else y
 	if math.is_inf(lx) || math.is_inf(ly) { return }
-	box: wlr.Box
-	wlr.wlr_output_layout_get_box(s.layout, nil, &box)
+	box: gles.Box
+	box = out.layout_box(s.layout, nil)
 	if box.width <= 0 || box.height <= 0 { return }
-	wlr.wlr_output_layout_closest_point(s.layout, nil, lx, ly, &s.cursor_x, &s.cursor_y)
+	s.cursor_x, s.cursor_y = out.layout_closest_point(s.layout, nil, lx, ly)
 }
 
-cursor_absolute_position :: proc(s: ^Server, pointer: ^wlr.wlr_pointer, x, y: f64) -> (f64, f64) {
-	output: ^wlr.wlr_output
+cursor_absolute_position :: proc(s: ^Server, pointer: ^bk.Pointer, x, y: f64) -> (f64, f64) {
+	output: ^out.Output
 	for o in s.outputs { if o.lifetime == pointer_output(s, pointer) { output = o.handle; break } }
-	box: wlr.Box
-	wlr.wlr_output_layout_get_box(s.layout, output, &box)
+	box: gles.Box
+	box = out.layout_box(s.layout, output)
 	return s.cursor_x if math.is_nan(x) else f64(box.x)+x*f64(box.width),
 		s.cursor_y if math.is_nan(y) else f64(box.y)+y*f64(box.height)
 }
@@ -85,7 +85,7 @@ cursor_absolute_position :: proc(s: ^Server, pointer: ^wlr.wlr_pointer, x, y: f6
 cursor_hint :: proc(s: ^Server, x, y: f64) {
 	lx, ly := s.cursor_x-s.seat.pointer_state.sx+x, s.cursor_y-s.seat.pointer_state.sy+y
 	if !math.is_nan(lx) && !math.is_nan(ly) && lx >= f64(min(i32)) && lx <= f64(max(i32)) &&
-	   ly >= f64(min(i32)) && ly <= f64(max(i32)) && wlr.wlr_output_layout_contains_point(s.layout, nil, i32(lx), i32(ly)) {
+	   ly >= f64(min(i32)) && ly <= f64(max(i32)) && out.layout_contains_point(s.layout, nil, f64(i32(lx)), f64(i32(ly))) {
 		s.cursor_x, s.cursor_y = lx, ly
 		st.pointer_warp(s.seat, x, y)
 	}
@@ -94,7 +94,7 @@ cursor_hint :: proc(s: ^Server, x, y: f64) {
 // The queued output lifetime prevents a removed device mapping from targeting its replacement.
 cursor_mapped_position :: proc(s: ^Server, output: u64, x,y: f64) -> (f64,f64) {
 	if output != 0 { for o in s.outputs { if o.lifetime == output {
-		box: wlr.Box; wlr.wlr_output_layout_get_box(s.layout, o.handle, &box)
+		box: gles.Box; box = out.layout_box(s.layout, o.handle)
 		if box.width>0 && box.height>0 { return clamp(x,f64(box.x),f64(box.x+box.width)-1.0/256),clamp(y,f64(box.y),f64(box.y+box.height)-1.0/256) }
 	} } }
 	return x,y

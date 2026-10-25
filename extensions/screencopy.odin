@@ -1,13 +1,12 @@
 package extensions
 
+import out "../outputs"
 import "../buffers"
-
 import "../gbm"
 import "../gles"
 import p "../protocols"
 import sp "../scene_paint"
 import wl "../wayland"
-import wlr "../wlroots"
 import "core:math"
 import "base:runtime"
 
@@ -19,13 +18,13 @@ Screencopy :: struct {
 	destroy: wl.Listener,
 }
 Screencopy_Binding :: struct { manager: ^Screencopy, refs: int, damage: [dynamic]^Screencopy_Damage }
-Screencopy_Damage :: struct { binding: ^Screencopy_Binding, output: ^wlr.wlr_output, box: wlr.Box, destroy: wl.Listener }
+Screencopy_Damage :: struct { binding: ^Screencopy_Binding, output: ^out.Output, box: gles.Box, destroy: wl.Listener }
 Screencopy_Frame :: struct {
 	manager: ^Screencopy,
 	binding: ^Screencopy_Binding,
 	resource: ^wl.Resource,
-	output: ^wlr.wlr_output,
-	box: wlr.Box,
+	output: ^out.Output,
+	box: gles.Box,
 	buffer: ^buffers.Buffer,
 	used, done, with_damage: bool,
 	destroy, commit: wl.Listener,
@@ -77,7 +76,7 @@ screencopy_binding_unref :: proc(b: ^Screencopy_Binding) {
 	free(b)
 }
 screencopy_binding_destroy :: proc(r: ^wl.Resource) { screencopy_binding_unref(cast(^Screencopy_Binding)r.data) }
-screencopy_damage :: proc(b: ^Screencopy_Binding, output: ^wlr.wlr_output) -> ^Screencopy_Damage {
+screencopy_damage :: proc(b: ^Screencopy_Binding, output: ^out.Output) -> ^Screencopy_Damage {
 	for d in b.damage { if d.output == output { return d } }
 	d := new(Screencopy_Damage)
 	d.binding, d.output, d.box = b, output, {0, 0, output.width, output.height}
@@ -113,7 +112,7 @@ screencopy_request :: proc(r: ^wl.Resource, request: p.Zwlr_Screencopy_Manager_V
 		if r.version >= 3 { wl.post(f.resource, u32(p.Zwlr_Screencopy_Frame_V1_Event.buffer_done)) }
 	}
 }
-screencopy_region :: proc(output: ^wlr.wlr_output, box: wlr.Box) -> wlr.Box {
+screencopy_region :: proc(output: ^out.Output, box: gles.Box) -> gles.Box {
 	if box.width <= 0 || box.height <= 0 || output.scale <= 0 { return {} }
 	w, h := output.width, output.height
 	if output.transform % 2 != 0 { w, h = h, w }
@@ -123,7 +122,7 @@ screencopy_region :: proc(output: ^wlr.wlr_output, box: wlr.Box) -> wlr.Box {
 	y := i32(math.floor(clamp(f64(box.y)*scale, 0, f64(h))))
 	x2 := i32(math.ceil(clamp(f64(i64(box.x)+i64(box.width))*scale, 0, f64(w))))
 	y2 := i32(math.ceil(clamp(f64(i64(box.y)+i64(box.height))*scale, 0, f64(h))))
-	return gles.transform_box(wlr.Box{x, y, x2-x, y2-y}, gles.transform_invert(output.transform), w, h)
+	return gles.transform_box(gles.Box{x, y, x2-x, y2-y}, gles.transform_invert(output.transform), w, h)
 }
 screencopy_frame_request :: proc(r: ^wl.Resource, request: p.Zwlr_Screencopy_Frame_V1_Request, args: []wl.Argument) {
 	f := cast(^Screencopy_Frame)r.data
@@ -151,7 +150,7 @@ screencopy_frame_request :: proc(r: ^wl.Resource, request: p.Zwlr_Screencopy_Fra
 		accepted, f.used, f.with_damage, f.buffer = true, true, request == .copy_with_damage, buffer
 		o := sp.get_scene_output(f.manager.scene, f.output)
 		if o != nil && o.last != nil && !f.with_damage { screencopy_copy(f, o) } else {
-			wlr.wlr_output_update_needs_frame(f.output)
+			out.update_needs_frame(f.output)
 		}
 	}
 }
@@ -166,13 +165,13 @@ screencopy_failed :: proc(f: ^Screencopy_Frame) {
 	if !f.done { wl.post(f.resource, u32(p.Zwlr_Screencopy_Frame_V1_Event.failed)) }
 	screencopy_release(f)
 }
-screencopy_output_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+screencopy_output_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	f := wl.owner(listener, Screencopy_Frame, "destroy")
 	context = f.resource.client.display.loop.ctx
 	screencopy_failed(f)
 }
-screencopy_output_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+screencopy_output_committed :: proc (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	f := wl.owner(listener, Screencopy_Frame, "commit")
 	context = f.resource.client.display.loop.ctx
@@ -187,7 +186,7 @@ screencopy_frame_destroy :: proc(r: ^wl.Resource) {
 	screencopy_binding_unref(f.binding)
 	free(f)
 }
-screencopy_committed :: proc(m: ^Screencopy, o: ^sp.Output, damage: []wlr.Box) {
+screencopy_committed :: proc(m: ^Screencopy, o: ^sp.Output, damage: []gles.Box) {
 	if m == nil { return }
 	for b in m.bindings {
 		for d in b.damage {
@@ -207,7 +206,7 @@ screencopy_committed :: proc(m: ^Screencopy, o: ^sp.Output, damage: []wlr.Box) {
 	}
 }
 screencopy_copy :: proc(f: ^Screencopy_Frame, o: ^sp.Output) {
-	b := sp.target_buffer(o.last)
+	b := o.last
 	box := f.box
 	if b == nil || !o.handle.enabled || box.x+box.width > b.width || box.y+box.height > b.height {
 		screencopy_failed(f); return

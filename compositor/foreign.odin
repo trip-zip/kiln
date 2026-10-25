@@ -1,11 +1,10 @@
 package compositor
 
+import out "../outputs"
 import ext "../extensions"
-
 import "base:runtime"
 import "core:strings"
 import wl "../wayland"
-import wlr "../wlroots"
 import vm "../lua_runtime"
 
 foreign_identity :: proc(v: ^View) {
@@ -50,7 +49,7 @@ foreign_destroy :: proc(v: ^View) {
     delete(v.foreign_title,v.foreign_allocator);delete(v.foreign_app,v.foreign_allocator);v.foreign_title="";v.foreign_app=""
 }
 foreign_place :: proc(v: ^View, output: ^Output) {
-    target: ^wlr.wlr_output
+    target: ^out.Output
     if output!=nil { target=output.handle }
     ext.foreign_output(v.foreign_handle,v.foreign_output,target)
     v.foreign_output=target

@@ -1,9 +1,8 @@
 package seat
 
+import bk "../backend"
 import sf "../surfaces"
-
 import wl "../wayland"
-import wlr "../wlroots"
 import rg "../region"
 
 surface_of :: proc(r: ^wl.Resource) -> ^sf.Surface { return sf.of(r) if r != nil else nil }
@@ -23,7 +22,7 @@ cursor_role_assign :: proc(surface: ^sf.Surface, r: ^wl.Resource) -> bool {
 	return true
 }
 
-device_leds :: proc(kb: ^wlr.wlr_keyboard, leds: u32) { if kb != nil { wlr.wlr_keyboard_led_update(kb, leds) } }
+device_leds :: proc(kb: ^bk.Keyboard, leds: u32) { if kb != nil { bk.keyboard_leds(kb, leds) } }
 
 icon_surface_commit :: proc(s: ^sf.Surface) {
 	rg.clear(&s.input_region)

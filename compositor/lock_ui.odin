@@ -1,9 +1,10 @@
 package compositor
 
+import gles "../gles"
+import out "../outputs"
 import layout "../layout"
 import vm "../lua_runtime"
 import sp "../scene_paint"
-import wlr "../wlroots"
 import "core:fmt"
 
 lock_ui_clear :: proc(o: ^Output) {
@@ -40,11 +41,11 @@ arrange_lock :: proc(o: ^Output) -> bool {
 		o.lock_ui = ui
 	}
 	ui := o.lock_ui
-	b: wlr.wlr_box
-	wlr.wlr_output_layout_get_box(s.layout, o.handle, &b)
+	b: gles.Box
+	b = out.layout_box(s.layout, o.handle)
 	ui.x, ui.y = b.x, b.y
 	ui.ui.scale = o.handle.scale
-	width, height := wlr.output_cover_size(o.handle)
+	width, height := out.cover_size(o.handle)
 	nodes, valid := vm.declare(&s.lua, &ui.ui, string(o.handle.name), width, height, true)
 	if !valid {return true}
 	commands, ok := layout.prepare(&ui.ui, width, height, nodes)

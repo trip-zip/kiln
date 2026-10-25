@@ -1,18 +1,18 @@
 package extensions
 
+import out "../outputs"
 import "../cairo"
 import paint "../paint"
 import "../readback"
 import sp "../scene_paint"
 import wl "../wayland"
-import wlr "../wlroots"
 import "core:fmt"
 import "core:os"
 import "core:strings"
 import "core:sys/linux"
 import "core:testing"
 
-gamma_test_changed :: proc(data: rawptr, output: ^wlr.wlr_output, table: []u16) -> bool {
+gamma_test_changed :: proc(data: rawptr, output: ^out.Output, table: []u16) -> bool {
 	return sp.set_gamma(cast(^sp.Scene)data, output, table)
 }
 gamma_test_control :: proc(t: ^testing.T, s: ^Capture_Test) -> ^Gamma {
@@ -39,7 +39,7 @@ gamma_test_set :: proc(s: ^Capture_Test, short: bool = false) {
 }
 gamma_test_pixels :: proc(t: ^testing.T, s: ^Capture_Test, name: string) -> []u8 {
 	assert(sp.output_commit(&s.paint))
-	shot, ok := readback.capture(sp.target_buffer(s.paint.last), s.output, s.renderer)
+	shot, ok := readback.capture(s.paint.last, s.output, s.renderer)
 	assert(ok)
 	defer paint.destroy(shot)
 	bytes := make([]u8, int(shot.stride)*int(shot.height), context.temp_allocator)
@@ -87,7 +87,7 @@ gamma_ramp_changes_pixels_and_failures_or_disconnect_restore_identity :: proc(t:
 			capture_send(s, []u32{7, 8<<16|1})
 			capture_pump(s)
 		case 4:
-			m.changed = proc(data: rawptr, output: ^wlr.wlr_output, table: []u16) -> bool {
+			m.changed = proc(data: rawptr, output: ^out.Output, table: []u16) -> bool {
 				if len(table) != 0 { return false }
 				return gamma_test_changed(data, output, table)
 			}
@@ -127,7 +127,7 @@ gamma_exclusivity_manager_and_output_lifetimes :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(gamma_table(m, s.output)), 768)
 	sp.output_finish(&s.paint)
 	s.paint = {}
-	wlr_output_destroy(s.output)
+	out.finish(s.output)
 	testing.expect(t, capture_event(capture_pump(s), 7, 1) != nil)
 	for c in m.controls { testing.expect(t, c.output == nil) }
 	gamma_test_set(s)

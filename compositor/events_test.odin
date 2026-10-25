@@ -1,13 +1,10 @@
 package compositor
 
+import out "../outputs"
 import st "../seat"
-
 import sh "../shells"
-
-
 import vm "../lua_runtime"
 import wl "../wayland"
-import wlr "../wlroots"
 import "core:strings"
 import "core:testing"
 
@@ -121,7 +118,7 @@ pointer_motion_precedes_enter_and_keeps_optional_fields :: proc(t: ^testing.T) {
 	}
 	testing.expect(t, s.display != nil)
 	defer destroy(&s)
-	s.layout = wlr.wlr_output_layout_create(s.display)
+	s.layout = out.layout_create(s.display)
 	s.cursor_manager = st.xcursor_manager_create(nil, 24)
 	s.seat = st.create(s.display, "test")
 	testing.expect(
@@ -162,7 +159,7 @@ queued_claim_transitions_and_owned_text :: proc(t: ^testing.T) {
 	}
 	testing.expect(t, s.display != nil)
 	defer destroy(&s)
-	s.layout = wlr.wlr_output_layout_create(s.display)
+	s.layout = out.layout_create(s.display)
 	s.cursor_manager = st.xcursor_manager_create(nil, 24)
 	s.seat = st.create(s.display, "queue")
 	s.buttons = make(map[u32]bool)

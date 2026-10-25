@@ -160,7 +160,7 @@ fractional_edges_raster_keys_and_crop_density :: proc(t: ^testing.T) {
 
 @(test)
 fractional_edges_match_native_float_multiplication :: proc(t: ^testing.T) {
-	// wlroots rounds a float product, not a double product of float operands.
+	// Rounding must preserve the float product used for pixel bounds.
 	testing.expect_value(t, device_edge(5, 1.3), 7)
 	testing.expect_value(t, device_edge(-5, 1.3), -7)
 	testing.expect_value(t, device_span(5, 5, 1.3), 6)

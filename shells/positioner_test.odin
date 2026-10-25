@@ -1,14 +1,14 @@
 package shells
 
-import wlr "../wlroots"
+import gles "../gles"
 import "core:testing"
 
 @(test)
 positioner_constraints_at_each_output_edge :: proc(t: ^testing.T) {
 	Case :: struct {
 		anchor, gravity:                    u32,
-		rect:                               wlr.Box,
-		raw, flip, slide, resize:           wlr.Box,
+		rect:                               gles.Box,
+		raw, flip, slide, resize:           gles.Box,
 		flip_flag, slide_flag, resize_flag: u32,
 	}
 	cases := []Case {
@@ -83,7 +83,7 @@ positioner_constraints_at_each_output_edge :: proc(t: ^testing.T) {
 		anchor_rect = {190, 140, 20, 20},
 		adjustment  = 63,
 	}
-	testing.expect_value(t, positioner_unconstrain(r, {0, 0, 400, 300}), wlr.Box{0, 0, 400, 300})
+	testing.expect_value(t, positioner_unconstrain(r, {0, 0, 400, 300}), gles.Box{0, 0, 400, 300})
 	r = {
 		width       = 100,
 		height      = 80,
@@ -95,13 +95,13 @@ positioner_constraints_at_each_output_edge :: proc(t: ^testing.T) {
 	testing.expect_value(
 		t,
 		positioner_unconstrain(r, {0, 0, 400, 300}),
-		wlr.Box{300, 220, 100, 80},
+		gles.Box{300, 220, 100, 80},
 	)
 	r.adjustment = 48
 	testing.expect_value(
 		t,
 		positioner_unconstrain(r, {0, 0, 400, 300}),
-		wlr.Box{430, 330, 100, 80},
+		gles.Box{430, 330, 100, 80},
 	)
 }
 
@@ -125,7 +125,7 @@ positioner_anchors_gravities_offsets_and_parent_hints :: proc(t: ^testing.T) {
 			testing.expect_value(
 				t,
 				positioner_geometry(r),
-				wlr.Box {
+				gles.Box {
 					157 + axis[anchor][0] * 20 + axis[gravity][0] * 50,
 					101 + axis[anchor][1] * 20 + axis[gravity][1] * 40,
 					100,

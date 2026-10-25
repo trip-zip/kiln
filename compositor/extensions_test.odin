@@ -1,14 +1,13 @@
 package compositor
 
+import bk "../backend"
+import out "../outputs"
 import sf "../surfaces"
-
 import st "../seat"
-
 import ext "../extensions"
 import p "../protocols"
 import wl "../wayland"
 import wire "../wayland_c"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:fmt"
 import "core:sys/linux"
@@ -91,8 +90,8 @@ extension_finish :: proc(s: ^Server) {
 	delete(s.events)
 	delete(s.idle_inhibitors)
 	delete(s.outputs)
-	if s.backend != nil { wlr.wlr_backend_destroy(s.backend) }
-	if s.layout != nil { wlr.wlr_output_layout_destroy(s.layout) }
+	if s.backend != nil { bk.destroy(s.backend) }
+	if s.layout != nil { out.layout_destroy(s.layout) }
 	delete(s.cursor_name, s.cursor_name_allocator)
 	wl.destroy(s.display)
 	free(s)
@@ -176,13 +175,13 @@ idle_notifications_timeout_activity_inhibition_and_lifetime :: proc(t: ^testing.
 idle_inhibitor_on_unmapped_surface_does_not_inhibit :: proc(t: ^testing.T) {
 	s := extension_server()
 	defer extension_finish(s)
-	s.backend = wlr_headless_backend_create(s.display.loop)
-	handle := wlr_headless_add_output(s.backend, 16, 12)
-	state: wlr.wlr_output_state
-	wlr.wlr_output_state_init(&state)
-	wlr.wlr_output_state_set_enabled(&state, true)
-	assert(wlr.wlr_output_commit_state(handle, &state))
-	wlr.wlr_output_state_finish(&state)
+	s.backend = bk.headless_create(s.display)
+	handle := bk.headless_add_output(s.backend, 16, 12)
+	state: out.State
+	out.state_init(&state)
+	out.set_enabled(&state, true)
+	assert(out.commit(handle, &state))
+	out.state_finish(&state)
 	output := Output{handle = handle}
 	append(&s.outputs, &output)
 	assert(init_idle(s))

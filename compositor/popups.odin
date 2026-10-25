@@ -1,10 +1,10 @@
 package compositor
 
+import gles "../gles"
+import out "../outputs"
 import sh "../shells"
 import sp "../scene_paint"
-
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 
 Popup :: struct {
@@ -75,8 +75,8 @@ popup_constrain :: proc(p: ^Popup, force := false) -> bool {
 	part, output, gx, gy := root_placement(p.server, p.root)
 	if output == nil || p.handle.parent == nil {return false}
 	x, y := output.x + part.box.x, output.y + part.box.y
-	box: wlr.wlr_box
-	wlr.wlr_output_layout_get_box(p.server.layout, output.handle, &box)
+	box: gles.Box
+	box = out.layout_box(p.server.layout, output.handle)
 	// The xdg scene root is the geometry origin; the helper consumes surface coordinates.
 	box.x -= x - gx
 	box.y -= y - gy

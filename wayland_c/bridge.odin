@@ -106,6 +106,8 @@ dispatch :: proc(resource: ^wl.Resource, opcode: u32, args: []wl.Argument) {
 			if !v.is_null {values[i] = uintptr(raw_data(v.value))}
 		case wl.Object:
 			values[i] = uintptr(v)
+		case wl.Proxy_Object:
+			unreachable()
 		case wl.New_Id:
 			values[i] = uintptr(v)
 		case wl.Array:

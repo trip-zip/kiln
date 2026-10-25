@@ -1,15 +1,12 @@
 package compositor
 
+import bk "../backend"
+import out "../outputs"
 import "../buffers"
-
 import sf "../surfaces"
-
 import xw "../xwayland"
-
 import st "../seat"
-
 import sh "../shells"
-
 import ext "../extensions"
 import auth "../authentication"
 import services "../desktop_bus"
@@ -17,7 +14,6 @@ import ipc "../ipc"
 import vm "../lua_runtime"
 import sp "../scene_paint"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:fmt"
 import "core:os"
@@ -55,8 +51,8 @@ Server :: struct {
 	keyboard_epoch, pointer_epoch, next_keyboard:                                         u64,
 	buttons:                                                                              map[u32]bool,
 	display:                                                                              ^wl.Display,
-	backend:                                                                              ^wlr.wlr_backend,
-	session:                                                                              ^wlr.wlr_session,
+	backend:                                                                              ^bk.Backend,
+	session:                                                                              ^bk.Session,
 	session_active, session_destroy:                                                      wl.Listener,
 	gles:                                                                                 ^gles.Renderer,
 	cursor_surface:                                                                       ^sf.Surface,
@@ -65,7 +61,7 @@ Server :: struct {
 	scene:                                                                                ^sp.Scene,
 	xdg_output:                                                                           ^ext.Xdg_Output_Manager,
 	gamma:                                                                                ^ext.Gamma,
-	layout:                                                                               ^wlr.wlr_output_layout,
+	layout:                                                                               ^out.Layout,
 	shell:                                                                                ^sh.Shell,
 	xwayland:                                                                             ^xw.Server,
 	x11_atoms:                                                                            [21]u32,
@@ -124,7 +120,7 @@ stop :: proc(number: linux.Signal, data: rawptr) -> i32 {
 	return 0
 }
 
-backend_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+backend_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	s := wl.owner(listener, Server, "backend_destroy")
 	wl.unlisten(&s.new_output)
@@ -186,7 +182,7 @@ destroy :: proc(s: ^Server) {
 	wl.unlisten(&s.backend_destroy)
 	wl.unlisten(&s.session_active)
 	wl.unlisten(&s.session_destroy)
-	if s.backend != nil {wlr.wlr_backend_destroy(s.backend)}
+	if s.backend != nil {bk.destroy(s.backend)}
 	fmt.printf(
 		"Input cleanup: keyboards %d, pointers %d, keyboard claim %v, pointer claim %v\n",
 		len(s.keyboards),
@@ -199,7 +195,7 @@ destroy :: proc(s: ^Server) {
 	if s.cursor_manager != nil {st.xcursor_manager_destroy(s.cursor_manager)}
 	if s.cursor_name != nil {delete(s.cursor_name, s.cursor_name_allocator)}
 	if s.scene != nil {sp.scene_destroy(s.scene)}
-	if s.layout != nil {wlr.wlr_output_layout_destroy(s.layout)}
+	if s.layout != nil {out.layout_destroy(s.layout)}
 	gles.destroy(s.gles)
 	if s.display != nil {wl.destroy(s.display)}
 	wl.unlisten(&s.new_lock)
@@ -234,13 +230,14 @@ run :: proc(startup_command := "") -> bool {
 	defer destroy(&s)
 	s.display = wl.create()
 	if s.display == nil {return false}
-	s.backend = wlr.wlr_backend_autocreate(wl.event_loop(s.display), &s.session)
+	s.backend = bk.create(s.display, bk.selected_name())
 	if s.backend == nil {return false}
+	s.session = s.backend.session
 	if s.session != nil {
 		wl.listen(&s.session.events.active, &s.session_active, session_changed)
 		wl.listen(&s.session.events.destroy, &s.session_destroy, session_destroyed)
 	}
-	s.gles = gles.create(wlr.backend_fd(s.backend))
+	s.gles = gles.create(s.backend.drm_fd)
 	if s.gles == nil {return false}
 	fmt.printf("Renderer: GLES %s; native session: %v\n", gles.name(s.gles), s.session != nil)
 	shm_formats, dmabuf_formats, device, formats_ok := gles.buffer_formats(s.gles)
@@ -249,7 +246,7 @@ run :: proc(startup_command := "") -> bool {
 	if compositor == nil {return false}
 	if sf.subcompositor_create(s.display) == nil {return false}
 	if sf.viewporter_create(s.display) == nil || sf.fractional_scale_create(s.display) == nil {return false}
-	s.layout = wlr.wlr_output_layout_create(s.display)
+	s.layout = out.layout_create(s.display)
 	if s.layout == nil {return false}
 	wl.listen(&s.layout.events.change, &s.layout_change, output_layout_changed)
 	s.xdg_output = ext.xdg_output_create(s.display, s.layout)
@@ -300,7 +297,7 @@ run :: proc(startup_command := "") -> bool {
 	socket := fmt.aprintf("kiln-%d", os.get_pid())
 	defer delete(socket)
 	if !wl.add_socket(s.display, socket) {return false}
-	if !wlr.wlr_backend_start(s.backend) || s.failed {return false}
+	if !bk.start(s.backend) || s.failed {return false}
 	init_xwayland(&s)
 	runtime_cursor(&s, "default")
 	child := wl.on_signal(s.display, .SIGCHLD, startup_exited, &s)

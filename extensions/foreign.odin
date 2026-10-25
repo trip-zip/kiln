@@ -1,12 +1,10 @@
 package extensions
 
+import out "../outputs"
 import sf "../surfaces"
-
 import st "../seat"
-
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:strings"
 
@@ -33,12 +31,12 @@ Foreign_Resource :: struct {
 	dirty: bit_set[Foreign_Property],
 	entered: [dynamic]^Foreign_Enter,
 }
-Foreign_Output :: struct { handle: ^Foreign_Handle, output: ^wlr.wlr_output, destroy, bind: wl.Listener }
+Foreign_Output :: struct { handle: ^Foreign_Handle, output: ^out.Output, destroy, bind: wl.Listener }
 Foreign_Enter :: struct { owner: ^Foreign_Resource, resource: ^wl.Resource, destroy: wl.Listener }
 Foreign_Maximized_Event :: struct { toplevel: ^Foreign_Handle, maximized: bool }
 Foreign_Minimized_Event :: struct { toplevel: ^Foreign_Handle, minimized: bool }
 Foreign_Activated_Event :: struct { toplevel: ^Foreign_Handle, seat: ^st.Seat }
-Foreign_Fullscreen_Event :: struct { toplevel: ^Foreign_Handle, fullscreen: bool, output: ^wlr.wlr_output }
+Foreign_Fullscreen_Event :: struct { toplevel: ^Foreign_Handle, fullscreen: bool, output: ^out.Output }
 Foreign_Rectangle_Event :: struct { toplevel: ^Foreign_Handle, surface: ^sf.Surface, x, y, width, height: i32 }
 
 foreign_manager_create :: proc(display: ^wl.Display) -> ^Foreign_Manager {
@@ -230,20 +228,20 @@ foreign_parent :: proc(h, parent: ^Foreign_Handle) {
 	h.parent = parent
 	foreign_mark(h, {.Parent})
 }
-foreign_output_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+foreign_output_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	o := wl.owner(listener, Foreign_Output, "destroy")
 	context = o.handle.manager.global.display.loop.ctx
 	foreign_mark(o.handle, {.Outputs})
 	foreign_output_forget(o)
 }
-foreign_output_bound :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+foreign_output_bound :: proc (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	o := wl.owner(listener, Foreign_Output, "bind")
 	context = o.handle.manager.global.display.loop.ctx
 	foreign_mark(o.handle, {.Outputs})
 }
-foreign_output :: proc(h: ^Foreign_Handle, old, next: ^wlr.wlr_output) {
+foreign_output :: proc(h: ^Foreign_Handle, old, next: ^out.Output) {
 	if h == nil || old == next { return }
 	context = h.manager.global.display.loop.ctx
 	for o in h.outputs { if o.output == old { foreign_output_forget(o); break } }

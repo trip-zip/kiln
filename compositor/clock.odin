@@ -1,8 +1,8 @@
 package compositor
 
+import out "../outputs"
 import "core:sys/posix"
 import vm "../lua_runtime"
-import wlr "../wlroots"
 
 monotonic :: proc() -> f64 {
 	now: posix.timespec
@@ -18,7 +18,7 @@ runtime_tick :: proc(data: rawptr, name: string, on: bool) {
 		o.tick_on=on
 		if on {
 			o.tick_last=monotonic()
-			if o.handle.enabled && !s.shutting_down { wlr.wlr_output_schedule_frame(o.handle) }
+			if o.handle.enabled && !s.shutting_down { out.schedule_frame(o.handle) }
 		}
 	}
 }

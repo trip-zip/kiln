@@ -1,10 +1,8 @@
 package scene_paint
 
 import sf "../surfaces"
-
 import sh "../shells"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "../gles"
 
@@ -71,7 +69,7 @@ remove_client :: proc(o: ^Output, id: u32) {
 	}
 }
 
-intersection :: proc(a, b: wlr.Box) -> wlr.Box {
+intersection :: proc(a, b: gles.Box) -> gles.Box {
 	x, y := max(a.x, b.x), max(a.y, b.y)
 	return {
 		x,
@@ -81,7 +79,7 @@ intersection :: proc(a, b: wlr.Box) -> wlr.Box {
 	}
 }
 
-contains :: proc(box: wlr.Box, x, y: f64) -> bool {
+contains :: proc(box: gles.Box, x, y: f64) -> bool {
 	return(
 		x >= f64(box.x) &&
 		y >= f64(box.y) &&
@@ -111,7 +109,7 @@ current_surfaces :: proc(p: Part) -> [dynamic]Surface_Position {
 	for &position, i in list {
 		position.x += p.box.x
 		position.y += p.box.y
-		if p.geometry != (wlr.Box{}) {
+		if p.geometry != (gles.Box{}) {
 			position.x -= p.geometry.x
 			position.y -= p.geometry.y
 		}

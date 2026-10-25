@@ -425,8 +425,8 @@ local function declare_layer(l, slots, to, parent)
 	end)
 end
 
--- The edge a layer surface's exclusive zone reserves (the protocol rule,
--- mirrored from wlr_layer_surface_v1_get_exclusive_edge): a positive zone
+-- The edge a layer surface's exclusive zone reserves, as the layer shell
+-- protocol defines it: a positive zone
 -- anchored to exactly one edge, or to one edge plus both perpendicular
 -- ones, reserves that edge; any other anchor set reserves nothing. A
 -- surface with no answered size yet reserves nothing either (the broken

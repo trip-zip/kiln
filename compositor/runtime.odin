@@ -1,18 +1,14 @@
 package compositor
 
+import gles "../gles"
+import out "../outputs"
 import xw "../xwayland"
-
 import sh "../shells"
-
 import ext "../extensions"
-
-
 import layout "../layout"
 import vm "../lua_runtime"
 import wl "../wayland"
-import wlr "../wlroots"
 import xcb "../xcb"
-import "base:runtime"
 import "core:fmt"
 import "core:sys/posix"
 
@@ -36,8 +32,8 @@ runtime_output :: proc(data: rawptr, index: int) -> (vm.Output, bool) {
 	if index >= len(s.outputs) {return {}, false}
 	// Enumerate newest outputs first, matching discovery order.
 	w := s.outputs[len(s.outputs) - 1 - index].handle
-	box: wlr.wlr_box
-	wlr.wlr_output_layout_get_box(s.layout, w, &box)
+	box: gles.Box
+	box = out.layout_box(s.layout, w)
 	name := string(w.name)
 	o := vm.Output {
 		name    = name[:min(len(name), 63)],
@@ -46,13 +42,13 @@ runtime_output :: proc(data: rawptr, index: int) -> (vm.Output, bool) {
 		refresh = w.refresh,
 		scale   = f64(w.scale),
 		enabled = w.enabled,
+		non_desktop = w.non_desktop,
 		x       = box.x,
 		y       = box.y,
 	}
 	o.logical_width, o.logical_height = box.width, box.height
-	it := wl.iterate(&w.modes)
-	for link, ok := wl.next(&it); ok && o.mode_count < len(o.modes); link, ok = wl.next(&it) {
-		m := runtime.container_of(link, wlr.wlr_output_mode, "link")
+	for m in w.modes {
+		if o.mode_count == len(o.modes) { break }
 		o.modes[o.mode_count] = {m.width, m.height, m.refresh}
 		o.mode_count += 1
 	}
@@ -69,8 +65,8 @@ runtime_layout :: proc(data: rawptr, name: string) -> (^layout.Layout, i32, i32)
 	s := (^Server)(data)
 	for output in s.outputs {
 		if string(output.handle.name) == name {
-			box: wlr.wlr_box
-			wlr.wlr_output_layout_get_box(s.layout, output.handle, &box)
+			box: gles.Box
+			box = out.layout_box(s.layout, output.handle)
 			return &output.ui, box.x, box.y
 		}
 	}

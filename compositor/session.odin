@@ -1,17 +1,14 @@
 package compositor
 
-import "base:runtime"
+import bk "../backend"
 import "core:fmt"
 import wl "../wayland"
-import wlr "../wlroots"
 
-session_changed :: proc "c" (listener:^wl.Listener,data:rawptr) {
-    context=runtime.default_context()
+session_changed :: proc (listener:^wl.Listener,data:rawptr) {
     s:=wl.owner(listener,Server,"session_active")
-    if wlr.session_active(s.session) { for o in s.outputs { dirty(o) } }
+    if bk.session_active(s.session) { for o in s.outputs { dirty(o) } }
 }
-session_destroyed :: proc "c" (listener:^wl.Listener,data:rawptr) {
-    context=runtime.default_context()
+session_destroyed :: proc (listener:^wl.Listener,data:rawptr) {
     s:=wl.owner(listener,Server,"session_destroy")
     wl.unlisten(&s.session_active);wl.unlisten(listener)
     s.session=nil
@@ -20,7 +17,7 @@ vt_number :: proc(symbol,mods:u32) -> u32 {
     if mods&4==0 || mods&8==0 || symbol<0x1008fe01 || symbol>0x1008fe0c { return 0 }
     return symbol-0x1008fe01+1
 }
-native_vt :: proc(s:^Server,syms:[]u32,mods:u32,pressed:bool,switch_vt:proc(^wlr.wlr_session,u32)->bool = wlr.session_switch) -> bool {
+native_vt :: proc(s:^Server,syms:[]u32,mods:u32,pressed:bool,switch_vt:proc(^bk.Session,u32)->bool = bk.session_switch) -> bool {
     if locked(s) || !pressed || s.session==nil { return false }
     for sym in syms {
         vt:=vt_number(sym,mods)

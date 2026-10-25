@@ -1003,7 +1003,7 @@ rule { match_any = {
 		role = { "pop%-up" },
 	},
 	props = { floating = true } }
-rule { match_any = { app = { "wlroots" }, class = { "wlroots" } },
+rule { match_any = { app = { "^kiln$" }, class = { "^kiln$" } },
 	props = { tag = "media", focus = false } }
 
 client.on("mouse::enter", function(c) c:focus() end)

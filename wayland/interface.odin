@@ -15,7 +15,7 @@ Message :: struct {
 
 Fixed :: distinct i32
 
-// wlroots may release arrays we fill, so their storage must use libc's allocator.
+// C consumers may release arrays we fill, so their storage must use libc's allocator.
 Array :: struct { size, alloc: uint, data: rawptr }
 
 #assert(size_of(Interface) == 40 && align_of(Interface) == 8)

@@ -1,34 +1,27 @@
 package extensions
 
+import gles "../gles"
+import out "../outputs"
 import sp "../scene_paint"
 import wl "../wayland"
-import wlr "../wlroots"
-import "base:runtime"
 import "core:fmt"
 import "core:testing"
 
-foreign import xdg_test_lib "system:wlroots-0.20"
-foreign xdg_test_lib {
-	wlr_output_set_description :: proc(output: ^wlr.wlr_output, description: cstring) ---
-	wlr_output_state_set_transform :: proc(state: ^wlr.wlr_output_state, transform: i32) ---
-}
 Xdg_Output_Test :: struct {
 	manager: ^Xdg_Output_Manager,
 	layout, commit: wl.Listener,
 }
-xdg_test_layout :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+xdg_test_layout :: proc(listener: ^wl.Listener, data: rawptr) {
 	f := wl.owner(listener, Xdg_Output_Test, "layout")
 	context = f.manager.global.display.loop.ctx
 	xdg_output_update(f.manager)
 }
-xdg_test_commit :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+xdg_test_commit :: proc(listener: ^wl.Listener, data: rawptr) {
 	f := wl.owner(listener, Xdg_Output_Test, "commit")
 	context = f.manager.global.display.loop.ctx
-	xdg_output_update(f.manager, (cast(^wlr.wlr_output_event_commit)data).output)
+	xdg_output_update(f.manager, (cast(^out.Commit_Event)data).output)
 }
-xdg_test_details :: proc(t: ^testing.T, events: []u8, version: u32, box: wlr.Box) {
+xdg_test_details :: proc(t: ^testing.T, events: []u8, version: u32, box: gles.Box) {
 	position, size := capture_event(events, 7, 0), capture_event(events, 7, 1)
 	if !testing.expect(t, position != nil && size != nil) { return }
 	testing.expect_value(t, i32(wl.word_read(position, 8)), box.x)
@@ -61,7 +54,7 @@ xdg_output_versions_geometry_metadata_and_completion :: proc(t: ^testing.T) {
 		wl.listen(&s.output.events.commit, &f.commit, xdg_test_commit)
 		defer wl.unlisten(&f.layout)
 		defer wl.unlisten(&f.commit)
-		wlr_output_set_description(s.output, "Gamma test monitor")
+		out.set_description(s.output, "Gamma test monitor")
 		capture_bind(s, "zxdg_output_manager_v1", version, 6)
 		capture_send(s, []u32{6, 16<<16|1, 7, 4})
 		events := capture_pump(s)
@@ -72,23 +65,23 @@ xdg_output_versions_geometry_metadata_and_completion :: proc(t: ^testing.T) {
 		} else {
 			testing.expect(t, capture_event(events, 7, 3) == nil && capture_event(events, 7, 4) == nil)
 		}
-		assert(wlr.wlr_output_layout_add(s.layout, s.output, -13, 27) != nil)
+		assert(out.layout_add(s.layout, s.output, -13, 27) != nil)
 		xdg_test_details(t, capture_pump(s), version, {-13, 27, 16, 12})
-		state: wlr.wlr_output_state
-		wlr.wlr_output_state_init(&state)
-		defer wlr.wlr_output_state_finish(&state)
-		wlr.wlr_output_state_set_scale(&state, 2)
-		assert(wlr.wlr_output_commit_state(s.output, &state))
+		state: out.State
+		out.state_init(&state)
+		defer out.state_finish(&state)
+		out.set_scale(&state, 2)
+		assert(out.commit(s.output, &state))
 		events = capture_pump(s)
 		xdg_test_details(t, events, version, {-13, 27, 8, 6})
 		testing.expect(t, capture_event(events, 7, 3) == nil && capture_event(events, 7, 4) == nil)
-		wlr_output_state_set_transform(&state, 1)
-		assert(wlr.wlr_output_commit_state(s.output, &state))
+		out.set_transform(&state, 1)
+		assert(out.commit(s.output, &state))
 		xdg_test_details(t, capture_pump(s), version, {-13, 27, 6, 8})
-		wlr.wlr_output_state_set_custom_mode(&state, 20, 14, 60000)
-		assert(wlr.wlr_output_commit_state(s.output, &state))
+		out.set_custom_mode(&state, 20, 14, 60000)
+		assert(out.commit(s.output, &state))
 		xdg_test_details(t, capture_pump(s), version, {-13, 27, 7, 10})
-		wlr_output_set_description(s.output, "Renamed monitor")
+		out.set_description(s.output, "Renamed monitor")
 		events = capture_pump(s)
 		if version == 3 {
 			xdg_test_string(t, events, 4, "Renamed monitor")
@@ -98,7 +91,7 @@ xdg_output_versions_geometry_metadata_and_completion :: proc(t: ^testing.T) {
 		// The child remains valid after the manager and its original wl_output are released.
 		capture_send(s, []u32{6, 8<<16, 4, 8<<16})
 		capture_pump(s)
-		assert(wlr.wlr_output_layout_add(s.layout, s.output, 2, 3) != nil)
+		assert(out.layout_add(s.layout, s.output, 2, 3) != nil)
 		events = capture_pump(s)
 		testing.expect(t, capture_event(events, 7, 0) != nil)
 		capture_send(s, []u32{7, 8<<16})
@@ -118,12 +111,12 @@ xdg_output_becomes_inert_when_output_or_layout_is_destroyed :: proc(t: ^testing.
 		capture_send(s, []u32{6, 16<<16|1, 7, 4})
 		capture_pump(s)
 		if layout_lost {
-			wlr.wlr_output_layout_destroy(s.layout)
+			out.layout_destroy(s.layout)
 			s.layout = nil
 		} else {
 			sp.output_finish(&s.paint)
 			s.paint = {}
-			wlr_output_destroy(s.output)
+			out.finish(s.output)
 		}
 		testing.expect(t, m.outputs[0].output == nil)
 		xdg_output_update(m)

@@ -20,7 +20,7 @@ Output :: struct {
 	width, height, refresh, x, y: i32,
 	logical_width, logical_height: i32,
 	scale: f64,
-	enabled: bool,
+	enabled, non_desktop: bool,
 	modes: [32]Mode,
 	mode_count: int,
 }
@@ -207,6 +207,7 @@ outputs :: proc "c" (L: ^lua.State) -> c.int {
 		number(L, "refresh", f64(o.refresh)); number(L, "scale", o.scale)
 		number(L, "x", f64(o.x)); number(L, "y", f64(o.y))
 		lua.pushboolean(L, b32(o.enabled)); lua.setfield(L, -2, "enabled")
+		if o.non_desktop { lua.pushboolean(L, true); lua.setfield(L, -2, "non_desktop") }
 		lua.newtable(L)
 		for m, j in o.modes[:o.mode_count] {
 			lua.newtable(L)

@@ -1,8 +1,8 @@
 package extensions
 
+import out "../outputs"
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:sys/linux"
 
@@ -10,20 +10,20 @@ Gamma :: struct {
 	global: ^wl.Global,
 	controls: [dynamic]^Gamma_Control,
 	size: u32,
-	changed: proc(rawptr, ^wlr.wlr_output, []u16) -> bool,
+	changed: proc(rawptr, ^out.Output, []u16) -> bool,
 	data: rawptr,
 	destroy: wl.Listener,
 }
 Gamma_Control :: struct {
 	manager: ^Gamma,
 	resource: ^wl.Resource,
-	output: ^wlr.wlr_output,
+	output: ^out.Output,
 	table: []u16,
 	size: u32,
 	destroy: wl.Listener,
 }
 
-gamma_create :: proc(display: ^wl.Display, changed: proc(rawptr, ^wlr.wlr_output, []u16) -> bool, data: rawptr) -> ^Gamma {
+gamma_create :: proc(display: ^wl.Display, changed: proc(rawptr, ^out.Output, []u16) -> bool, data: rawptr) -> ^Gamma {
 	m := new(Gamma)
 	m.size = 256
 	m.changed, m.data = changed, data
@@ -42,7 +42,7 @@ gamma_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	delete(m.controls)
 	free(m)
 }
-gamma_table :: proc(m: ^Gamma, output: ^wlr.wlr_output) -> []u16 {
+gamma_table :: proc(m: ^Gamma, output: ^out.Output) -> []u16 {
 	if m != nil { for c in m.controls { if c.output == output { return c.table } } }
 	return nil
 }
@@ -76,7 +76,7 @@ gamma_failed :: proc(c: ^Gamma_Control) {
 	wl.post(c.resource, u32(p.Zwlr_Gamma_Control_V1_Event.failed))
 	gamma_release(c)
 }
-gamma_output_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+gamma_output_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	c := wl.owner(listener, Gamma_Control, "destroy")
 	context = c.resource.client.display.loop.ctx

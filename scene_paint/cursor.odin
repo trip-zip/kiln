@@ -1,21 +1,17 @@
 package scene_paint
 
 import "../buffers"
-
 import sf "../surfaces"
-
 import st "../seat"
-
 import "../gles"
 import paint "../paint"
-import wlr "../wlroots"
 import "core:math"
 
 Cursor :: struct {
 	surface:         ^sf.Surface,
 	pixels:          ^Buffer,
 	image:           rawptr,
-	box, device_box: wlr.Box,
+	box, device_box: gles.Box,
 	shown:           bool,
 }
 
@@ -50,7 +46,7 @@ cursor_set :: proc(
 	}
 	next.device_box = output_box(o, next.box)
 	if image != nil {
-		box := wlr.Box {
+		box := gles.Box {
 			i32(math.floor((x - f64(o.bounds.x)) * f64(o.scale) - f64(image.hotspot_x))),
 			i32(math.floor((y - f64(o.bounds.y)) * f64(o.scale) - f64(image.hotspot_y))),
 			i32(image.width),
@@ -96,17 +92,17 @@ cursor_finish :: proc(o: ^Output) {
 draw_cursor :: proc(
 	o: ^Output,
 	pass: ^gles.Pass,
-	repaint: []wlr.Box,
+	repaint: []gles.Box,
 	drawn: ^[dynamic]^sf.Surface,
 ) -> bool {
 	c := o.cursor
 	if !c.shown {return true}
 	t: ^gles.Texture
-	source: wlr.wlr_fbox
+	source: gles.FBox
 	transform := gles.transform_invert(o.transform)
 	if c.surface != nil {
 		t = surface_texture(o, c.surface)
-		source = wlr.wlr_fbox(sf.source_box(c.surface))
+		source = gles.FBox(sf.source_box(c.surface))
 		transform = gles.transform_compose(
 			gles.transform_invert(c.surface.current.transform),
 			transform,

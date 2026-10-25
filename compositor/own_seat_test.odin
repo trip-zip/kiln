@@ -1,11 +1,10 @@
 package compositor
 
+import bk "../backend"
 import sf "../surfaces"
-
 import st "../seat"
 import km "../keymap"
 import wl "../wayland"
-import wlr "../wlroots"
 import p "../protocols"
 import "core:sys/linux"
 import "core:testing"
@@ -46,7 +45,7 @@ owned_seat_keyboard_keymap_pressed_keys_and_display_serials :: proc(t: ^testing.
 		testing.expect(t, read_err == .NONE && n == 1 && last[0] == 0, "keymap size includes NUL")
 		testing.expect(t, linux.ftruncate(fd,0) != .NONE)
 	}
-	press := wlr.wlr_keyboard_key_event{keycode=42,state=1}
+	press := bk.Key_Event{keycode=42,state=1}
 	st.keyboard_update_key(&kb,&press)
 	testing.expect(t, kb.modifiers.depressed != 0 && km.modifier_mask(kb.state)&1 != 0)
 	surface := sf.of(wl.client_get_object(c.client,6))

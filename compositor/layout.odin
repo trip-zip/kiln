@@ -1,16 +1,17 @@
 package compositor
 
+import gles "../gles"
+import out "../outputs"
 import layout "../layout"
 import vm "../lua_runtime"
 import sp "../scene_paint"
-import wlr "../wlroots"
 import "core:fmt"
 
 
 dirty :: proc(output: ^Output) {
 	if output == nil {return}
 	output.dirty = true
-	if output.handle.enabled {wlr.wlr_output_schedule_frame(output.handle)}
+	if output.handle.enabled {out.schedule_frame(output.handle)}
 }
 
 // Compare against our last request, never against the client's committed size.
@@ -196,8 +197,8 @@ arrange :: proc(output: ^Output) -> bool {
 		dirty(output)
 		return true
 	}
-	box: wlr.wlr_box
-	wlr.wlr_output_layout_get_box(output.server.layout, output.handle, &box)
+	box: gles.Box
+	box = out.layout_box(output.server.layout, output.handle)
 	if output.x != box.x || output.y != box.y {
 		output.x, output.y = box.x, box.y
 		// Output placement is already committed even if a new declaration fails.

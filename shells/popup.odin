@@ -1,14 +1,13 @@
 package shells
 
+import gles "../gles"
 import sf "../surfaces"
-
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 
 Popup_State :: struct {
-	geometry: wlr.Box,
+	geometry: gles.Box,
 	rules:    Positioner_Rules,
 }
 Popup_Configure :: struct {
@@ -20,7 +19,7 @@ Popup :: struct {
 	base:                                                               ^Xdg_Surface,
 	surface, parent:                                                    ^sf.Surface,
 	scheduled, current, pending:                                        Popup_State,
-	geometry, explicit_geometry, pending_geometry:                      wlr.Box,
+	geometry, explicit_geometry, pending_geometry:                      gles.Box,
 	geometry_changed, initialized, initial_commit, configured, grabbed: bool,
 	reposition_pending:                                                 bool,
 	reposition_token:                                                   u32,
@@ -107,7 +106,7 @@ popup_parent_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	if v.scheduled.rules.reactive {wl.signal_emit_mutable(&v.events.reposition, v)}
 }
 popup_window_geometry :: proc(v: ^Popup, args: []wl.Argument) {
-	box := wlr.Box {
+	box := gles.Box {
 		i32(args[0].(wl.Int)),
 		i32(args[1].(wl.Int)),
 		i32(args[2].(wl.Int)),
@@ -253,14 +252,14 @@ get_toplevel_coords :: proc(v: ^Popup, x, y: i32) -> (i32, i32) {
 	}
 	return tx, ty
 }
-unconstrain_from_box :: proc(v: ^Popup, bounds: wlr.Box) {
+unconstrain_from_box :: proc(v: ^Popup, bounds: gles.Box) {
 	x, y := get_toplevel_coords(v, 0, 0)
 	constraint := bounds; constraint.x -= x; constraint.y -= y
 	v.scheduled.geometry = positioner_unconstrain(v.scheduled.rules, constraint)
 	popup_schedule_configure(v)
 }
 // Buffer commits must not schedule unchanged geometry and create a configure feedback loop.
-popup_constrain :: proc(v: ^Popup, bounds: wlr.Box, force: bool) {
+popup_constrain :: proc(v: ^Popup, bounds: gles.Box, force: bool) {
 	x, y := get_toplevel_coords(v, 0, 0)
 	constraint := bounds; constraint.x -= x; constraint.y -= y
 	geometry := positioner_unconstrain(v.scheduled.rules, constraint)

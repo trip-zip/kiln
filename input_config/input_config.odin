@@ -1,7 +1,7 @@
 package input_config
 
+import bk "../backend"
 import raw "../libinput"
-import wlr "../wlroots"
 import "core:c"
 Optional :: struct($T: typeid) { value: T, present: bool }
 Pointer :: struct {
@@ -18,9 +18,8 @@ click :: proc(name: string) -> c.int {
 	switch name { case "button_areas": return 1; case "clickfinger": return 2 }
 	return 0
 }
-apply :: proc(device: ^wlr.wlr_input_device, cfg: Pointer) {
-	if !wlr.wlr_input_device_is_libinput(device) { return }
-	dev := wlr.wlr_libinput_get_device_handle(device)
+apply :: proc(device: ^bk.Device, cfg: Pointer) {
+	dev := device.libinput
 	if dev == nil { return }
 	if cfg.tap_to_click.present && raw.libinput_device_config_tap_get_finger_count(dev)>0 {
 		raw.libinput_device_config_tap_set_enabled(dev, c.int(cfg.tap_to_click.value))

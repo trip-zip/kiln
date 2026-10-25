@@ -1,9 +1,10 @@
 package compositor
 
+import bk "../backend"
+import out "../outputs"
 import st "../seat"
 import ext "../extensions"
 import wl "../wayland"
-import wlr "../wlroots"
 import sp "../scene_paint"
 import vm "../lua_runtime"
 import "core:testing"
@@ -54,11 +55,11 @@ owned_lock_delivers_relative_motion_and_committed_hint_on_release :: proc(t: ^te
 		extension_bind(client,"zwp_relative_pointer_manager_v1",1,18)
 		extension_send(client,[]u32{18,16<<16|1,19,4}); extension_pump(client)
 	}
-	s.backend=wlr_headless_backend_create(s.display.loop)
-	handle:=wlr_headless_add_output(s.backend,100,100)
-	state:wlr.wlr_output_state; wlr.wlr_output_state_init(&state)
-	wlr.wlr_output_state_set_enabled(&state,true); assert(wlr.wlr_output_commit_state(handle,&state)); wlr.wlr_output_state_finish(&state)
-	s.layout=wlr.wlr_output_layout_create(s.display); wlr.wlr_output_layout_add(s.layout,handle,0,0)
+	s.backend=bk.headless_create(s.display)
+	handle:=bk.headless_add_output(s.backend,100,100)
+	state:out.State; out.state_init(&state)
+	out.set_enabled(&state,true); assert(out.commit(handle,&state)); out.state_finish(&state)
+	s.layout=out.layout_create(s.display); out.layout_add(s.layout,handle,0,0)
 	o:=Output{server=s,handle=handle,lifetime=1}
 	append(&s.outputs,&o)
 	o.paint.bounds={0,0,100,100}; o.paint.scale=1

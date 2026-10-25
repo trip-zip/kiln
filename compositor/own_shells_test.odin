@@ -1,13 +1,11 @@
 package compositor
 
+import gles "../gles"
 import "../buffers"
-
 import sf "../surfaces"
-
 import sh "../shells"
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "core:sys/linux"
 import "core:testing"
 
@@ -98,7 +96,7 @@ owned_toplevel_configure_metadata_mapping_and_remapping :: proc(t: ^testing.T) {
 	extension_send(&c, []u32{6, 20<<16|1, 22, 0, 0, 6, 8<<16|6})
 	extension_pump(&c)
 	testing.expect(t, v.mapped && top.surface.mapped && !top.initial_commit, "map signal reached the view")
-	testing.expect_value(t, top.geometry, wlr.Box{0,0,64,48})
+	testing.expect_value(t, top.geometry, gles.Box{0,0,64,48})
 	testing.expect_value(t, v.decoration.current_mode, i32(2))
 	testing.expect_value(t, top.current.tiled, u32(15))
 	sh.set_size(top, 100, 80); sh.set_maximized(top, true); sh.set_activated(top, true)
@@ -258,19 +256,19 @@ owned_toplevel_geometry_includes_subsurfaces_and_latches_explicit_bounds :: proc
 	extension_pump(&c)
 	top := xdg(s.views[0])
 	testing.expect(t, top.surface.mapped)
-	testing.expect_value(t, top.geometry, wlr.Box{-20,-10,84,58})
+	testing.expect_value(t, top.geometry, gles.Box{-20,-10,84,58})
 	extension_send(&c, []u32{8, 24<<16|3, ~u32(29), ~u32(29), 100, 100})
 	extension_pump(&c)
-	testing.expect(t, top.geometry == (wlr.Box{-20,-10,84,58}), "geometry is double-buffered")
+	testing.expect(t, top.geometry == (gles.Box{-20,-10,84,58}), "geometry is double-buffered")
 	extension_send(&c, []u32{6, 8<<16|6})
 	extension_pump(&c)
-	testing.expect(t, top.geometry == (wlr.Box{-20,-10,84,58}), "explicit bounds are clamped to extents")
+	testing.expect(t, top.geometry == (gles.Box{-20,-10,84,58}), "explicit bounds are clamped to extents")
 	extension_send(&c, []u32{12, 16<<16|1, ~u32(39), ~u32(19), 6, 8<<16|6})
 	extension_pump(&c)
-	testing.expect(t, top.geometry == (wlr.Box{-30,-20,94,68}), "explicit box is remembered and effective geometry is re-clamped")
+	testing.expect(t, top.geometry == (gles.Box{-30,-20,94,68}), "explicit box is remembered and effective geometry is re-clamped")
 	extension_send(&c, []u32{8, 24<<16|3, 5, 6, 20, 30, 6, 8<<16|6})
 	extension_pump(&c)
-	testing.expect_value(t, top.geometry, wlr.Box{5,6,20,30})
+	testing.expect_value(t, top.geometry, gles.Box{5,6,20,30})
 }
 
 @(test)
@@ -323,11 +321,11 @@ owned_toplevel_accepts_raw_title_and_reclamps_smaller_buffer :: proc(t: ^testing
 	shell_test_buffer(&c)
 	extension_send(&c, []u32{8, 12<<16|4, serial, 8, 24<<16|3, 0, 0, 64, 48, 6, 20<<16|1, 22, 0, 0, 6, 8<<16|6})
 	extension_pump(&c)
-	testing.expect_value(t, top.geometry, wlr.Box{0,0,64,48})
+	testing.expect_value(t, top.geometry, gles.Box{0,0,64,48})
 	extension_send(&c, []u32{22, 8<<16})
 	extension_pump(&c)
 	shell_test_buffer(&c, 32, 24, false)
 	extension_send(&c, []u32{6, 20<<16|1, 22, 0, 0, 6, 8<<16|6})
 	extension_pump(&c)
-	testing.expect_value(t, top.geometry, wlr.Box{0,0,32,24})
+	testing.expect_value(t, top.geometry, gles.Box{0,0,32,24})
 }

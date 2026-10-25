@@ -92,13 +92,13 @@ zxdg_output_v1: wl.Interface = {
 	5, &zxdg_output_v1_events[0],
 }
 
-xdg_output_unstable_v1_interfaces := [?]^wl.Interface{
+zxdg_output_unstable_v1_interfaces := [?]^wl.Interface{
 	&zxdg_output_manager_v1,
 	&zxdg_output_v1,
 }
 
 @(init, private)
-xdg_output_unstable_v1_init_types :: proc "contextless"() {
+zxdg_output_unstable_v1_init_types :: proc "contextless"() {
 	zxdg_output_manager_v1_request_get_xdg_output_types[0] = &zxdg_output_v1
 	zxdg_output_manager_v1_request_get_xdg_output_types[1] = &wl_output
 }

@@ -1,17 +1,14 @@
 package compositor
 
+import out "../outputs"
 import st "../seat"
-
 import sp "../scene_paint"
-
 import layout "../layout"
-
 import auth "../authentication"
 import "../keymap"
 import vm "../lua_runtime"
 import sh "../shells"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 
 Lock_Owner :: enum {
@@ -44,7 +41,7 @@ lock_cover :: proc(s: ^Server) {
 			defer delete(parts)
 			for p in s.lock_surfaces {
 				if p.handle.output != o.handle {continue}
-				w, h := wlr.output_logical_size(o.handle)
+				w, h := out.effective_resolution(o.handle)
 				if p.width != w || p.height != h {
 					p.width, p.height = w, h
 					sh.lock_configure(p.handle, w, h)
@@ -135,10 +132,10 @@ lock_maybe_ack :: proc(s: ^Server) {
 	s.lock_acknowledged = true
 	sh.lock_acknowledge(s.ext_lock)
 }
-lock_presented :: proc "c" (listener: ^wl.Listener, data: rawptr) {
+lock_presented :: proc (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	o := wl.owner(listener, Output, "present")
-	e := (^wlr.wlr_output_event_present)(data)
+	e := (^out.Present_Event)(data)
 	if !locked(o.server) || !o.lock_submitted || !e.presented {return}
 	if i32(e.commit_seq - o.lock_commit_seq) < 0 {return}
 	o.lock_presented = true
@@ -202,7 +199,7 @@ lock_surface_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	wl.listen(&p.handle.surface.events.map_, &p.map_, lock_surface_mapped)
 	wl.listen(&p.handle.surface.events.unmap, &p.unmap, lock_surface_unmapped)
 	// Disabled outputs still need an initial configure to complete the role handshake.
-	p.width, p.height = wlr.output_logical_size(p.handle.output)
+	p.width, p.height = out.effective_resolution(p.handle.output)
 	sh.lock_configure(p.handle, p.width, p.height)
 	lock_cover(s)
 }

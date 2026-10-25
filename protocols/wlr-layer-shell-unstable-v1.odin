@@ -153,13 +153,13 @@ Zwlr_Layer_Surface_V1_Anchor_Bit :: enum u8 {
 	right = 3,
 }
 
-wlr_layer_shell_unstable_v1_interfaces := [?]^wl.Interface{
+zwlr_layer_shell_unstable_v1_interfaces := [?]^wl.Interface{
 	&zwlr_layer_shell_v1,
 	&zwlr_layer_surface_v1,
 }
 
 @(init, private)
-wlr_layer_shell_unstable_v1_init_types :: proc "contextless"() {
+zwlr_layer_shell_unstable_v1_init_types :: proc "contextless"() {
 	zwlr_layer_shell_v1_request_get_layer_surface_types[0] = &zwlr_layer_surface_v1
 	zwlr_layer_shell_v1_request_get_layer_surface_types[1] = &wl_surface
 	zwlr_layer_shell_v1_request_get_layer_surface_types[2] = &wl_output

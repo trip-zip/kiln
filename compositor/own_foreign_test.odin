@@ -1,11 +1,11 @@
 package compositor
 
+import bk "../backend"
+import out "../outputs"
 import sh "../shells"
-
 import ext "../extensions"
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:fmt"
 import "core:testing"
@@ -16,16 +16,16 @@ extension_event_count :: proc(bytes: []u8, id, opcode: u32) -> (count: int) {
 	}
 	return
 }
-foreign_test_output :: proc(s: ^Server) -> ^wlr.wlr_output {
-	s.backend = wlr_headless_backend_create(s.display.loop)
-	s.layout = wlr.wlr_output_layout_create(s.display)
-	o := wlr_headless_add_output(s.backend, 16, 12)
-	state: wlr.wlr_output_state
-	wlr.wlr_output_state_init(&state)
-	wlr.wlr_output_state_set_enabled(&state, true)
-	assert(wlr.wlr_output_commit_state(o, &state))
-	wlr.wlr_output_state_finish(&state)
-	assert(wlr.wlr_output_layout_add_auto(s.layout, o) != nil)
+foreign_test_output :: proc(s: ^Server) -> ^out.Output {
+	s.backend = bk.headless_create(s.display)
+	s.layout = out.layout_create(s.display)
+	o := bk.headless_add_output(s.backend, 16, 12)
+	state: out.State
+	out.state_init(&state)
+	out.set_enabled(&state, true)
+	assert(out.commit(o, &state))
+	out.state_finish(&state)
+	assert(out.layout_add_auto(s.layout, o) != nil)
 	return o
 }
 foreign_test_id :: proc(events: []u8, manager: u32) -> u32 {
@@ -193,7 +193,7 @@ owned_foreign_rectangle_validation_and_output_destruction :: proc(t: ^testing.T)
 		} else {
 			testing.expect(t, extension_event(events, 1, 0) == nil)
 			// Backend destruction removes output pointers before deferred leave delivery.
-			wlr.wlr_backend_destroy(s.backend)
+			bk.destroy(s.backend)
 			s.backend = nil
 			testing.expect_value(t, len(h.outputs), 0)
 			events = extension_pump(&c)
