@@ -1,9 +1,7 @@
 package gles
 
 import "../gbm"
-import wlr "../wlroots"
-import "base:runtime"
-import "core:c"
+import "../buffers"
 import "core:fmt"
 import "core:os"
 import "core:strings"
@@ -59,7 +57,7 @@ lost_renderer_rejects_gpu_work :: proc(t: ^testing.T) {
 	testing.expect(t, !read_region(&r, &b, &pixels[0], 4, {0, 0, 1, 1}))
 	tex := Texture{renderer = &r}
 	testing.expect(t, !upload(&tex, nil, true))
-	native: wlr.wlr_buffer
+	native: buffers.Buffer
 	testing.expect(t, import_buffer(&r, &native) == nil)
 	gamma: Gamma
 	testing.expect(t, !gamma_update(&r, &gamma, nil))
@@ -67,37 +65,14 @@ lost_renderer_rejects_gpu_work :: proc(t: ^testing.T) {
 }
 
 Test_Pixels :: struct {
-	base:   wlr.wlr_buffer,
+	base:   buffers.Buffer,
 	pixels: [16]u8,
 }
 
-test_impl := wlr.wlr_buffer_impl {
-	destroy               = test_destroy,
-	begin_data_ptr_access = test_access,
-	end_data_ptr_access   = test_end,
-}
-
-test_destroy :: proc "c" (b: ^wlr.wlr_buffer) {
-	context = runtime.default_context()
-	wlr.buffer_finish(b)
-}
-
-test_end :: proc "c" (b: ^wlr.wlr_buffer) {
-	context = runtime.default_context()
-}
-
-test_access :: proc "c" (
-	b: ^wlr.wlr_buffer,
-	flags: u32,
-	data: ^rawptr,
-	format: ^u32,
-	stride: ^c.size_t,
-) -> bool {
-	context = runtime.default_context()
-	data^ = &(^Test_Pixels)(b).pixels[0]
-	format^ = gbm.XRGB8888
-	stride^ = 8
-	return true
+test_destroy :: proc(b: ^buffers.Buffer) {}
+test_end :: proc(b: ^buffers.Buffer) {}
+test_access :: proc(b: ^buffers.Buffer, access: buffers.Access) -> (rawptr, u32, int, bool) {
+	return &(^Test_Pixels)(b).pixels[0], gbm.XRGB8888, 8, true
 }
 
 @(test)
@@ -129,9 +104,10 @@ rect_texture_damage_and_readback :: proc(t: ^testing.T) {
 	defer buffer_destroy(b)
 	pixels: Test_Pixels
 	pixels.pixels = {0, 0, 255, 0, 0, 255, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0}
-	wlr.wlr_buffer_init(&pixels.base, &test_impl, 2, 2)
+	buffers.init(&pixels.base, 2, 2)
+	pixels.base.destroy, pixels.base.access_begin, pixels.base.access_end = test_destroy, test_access, test_end
 	defer {
-		if !pixels.base.dropped {wlr.wlr_buffer_drop(&pixels.base)}
+		if !pixels.base.dropped {buffers.drop(&pixels.base)}
 	}
 	tex := import_buffer(r, &pixels.base)
 	if !testing.expect(t, tex != nil) {return}
@@ -217,7 +193,7 @@ rect_texture_damage_and_readback :: proc(t: ^testing.T) {
 	testing.expect(t, gamma.name == 0 && len(gamma.table) == 0)
 
 	texture_retain(tex)
-	wlr.wlr_buffer_drop(&pixels.base)
+	buffers.drop(&pixels.base)
 	testing.expect_value(t, len(r.textures), 0)
 	testing.expect(t, tex.buffer == nil && tex.pins == 1)
 	texture_release(tex)

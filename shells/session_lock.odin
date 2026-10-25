@@ -1,5 +1,7 @@
 package shells
 
+import sf "../surfaces"
+
 import p "../protocols"
 import wl "../wayland"
 import wlr "../wlroots"
@@ -29,7 +31,7 @@ Lock_Surface :: struct {
 	resource:                    ^wl.Resource,
 	lock:                        ^Lock,
 	output:                      ^wlr.wlr_output,
-	surface:                     ^wlr.Surface,
+	surface:                     ^sf.Surface,
 	current, pending, scheduled: Lock_Configure,
 	queue:                       [dynamic]Lock_Configure,
 	serial:                      u32,

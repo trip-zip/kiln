@@ -1,5 +1,7 @@
 package scene_paint
 
+import sf "../surfaces"
+
 import layout "../layout"
 import wlr "../wlroots"
 
@@ -14,7 +16,7 @@ Part :: struct {
 	kind:              Kind,
 	color:             [4]f32,
 	pixels:            ^Buffer,
-	surface:           ^wlr.Surface,
+	surface:           ^sf.Surface,
 	geometry:          wlr.Box,
 	source:            wlr.wlr_fbox,
 	coverage, visible: wlr.Box,

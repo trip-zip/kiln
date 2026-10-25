@@ -1,5 +1,7 @@
 package shells
 
+import sf "../surfaces"
+
 import st "../seat"
 
 import p "../protocols"
@@ -21,7 +23,7 @@ Shell :: struct {
 Xdg_Surface :: struct {
 	resource, owner: ^wl.Resource,
 	shell: ^Shell,
-	surface: ^wlr.Surface,
+	surface: ^sf.Surface,
 	toplevel: ^Toplevel,
 	popup: ^Popup,
 	popups: [dynamic]^Popup,
@@ -36,7 +38,7 @@ Toplevel_State :: struct {
 Toplevel_Configure :: struct { serial: u32, state: Toplevel_State, decoration_mode: i32 }
 Toplevel :: struct {
 	resource: ^wl.Resource,
-	surface: ^wlr.Surface,
+	surface: ^sf.Surface,
 	base: ^Xdg_Surface,
 	parent: ^Toplevel,
 	title, app_id: string,

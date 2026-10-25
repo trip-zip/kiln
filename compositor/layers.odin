@@ -89,8 +89,7 @@ layer_watchdog :: proc(data: rawptr) -> i32 {
 	}
 	return 0
 }
-layer_commit :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+layer_commit :: proc (listener: ^wl.Listener, data: rawptr) {
 	l := wl.owner(listener, Layer, "commit")
 	if l.output != nil {sp.client_damage(&l.output.paint, l.id)}
 	if l.handle.initial_commit {
@@ -100,14 +99,12 @@ layer_commit :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 		if l.watchdog != nil {wl.arm_timer(l.watchdog, 3000*time.Millisecond)}
 	} else if l.handle.initialized && l.handle.current.committed != 0 {queue_layer(l, "commit")}
 }
-layer_map :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+layer_map :: proc (listener: ^wl.Listener, data: rawptr) {
 	l := wl.owner(listener, Layer, "map_")
 	l.mapped = true
 	queue_layer(l, "mapped")
 }
-layer_unmap :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+layer_unmap :: proc (listener: ^wl.Listener, data: rawptr) {
 	l := wl.owner(listener, Layer, "unmap")
 	l.mapped = false
 	l.configured = false

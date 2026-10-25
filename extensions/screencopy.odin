@@ -1,5 +1,7 @@
 package extensions
 
+import "../buffers"
+
 import "../gbm"
 import "../gles"
 import p "../protocols"
@@ -24,7 +26,7 @@ Screencopy_Frame :: struct {
 	resource: ^wl.Resource,
 	output: ^wlr.wlr_output,
 	box: wlr.Box,
-	buffer: ^wlr.wlr_buffer,
+	buffer: ^buffers.Buffer,
 	used, done, with_damage: bool,
 	destroy, commit: wl.Listener,
 }
@@ -134,20 +136,18 @@ screencopy_frame_request :: proc(r: ^wl.Resource, request: p.Zwlr_Screencopy_Fra
 		buffer := buffer_of(wl.object(args[0]))
 		if buffer == nil { wl.post_error(r, u32(p.Zwlr_Screencopy_Frame_V1_Error.invalid_buffer), "invalid buffer"); return }
 		accepted := false
-		defer if !accepted { wlr.buffer_release(buffer) }
-		attrs: wlr.wlr_shm_attributes
-		if !wlr.wlr_buffer_get_shm(buffer, &attrs) || buffer.width != f.box.width || buffer.height != f.box.height ||
+		defer if !accepted { buffers.unlock(buffer) }
+		attrs, shm_ok := buffers.shm(buffer)
+		if !shm_ok || buffer.width != f.box.width || buffer.height != f.box.height ||
 		   attrs.format != gbm.ARGB8888 || attrs.stride != f.box.width*4 {
 			wl.post_error(r, u32(p.Zwlr_Screencopy_Frame_V1_Error.invalid_buffer), "invalid shm buffer attributes"); return
 		}
-		data: rawptr
-		format: u32
-		stride: uint
-		if !wlr.buffer_access(buffer, wlr.WLR_BUFFER_DATA_PTR_ACCESS_WRITE, &data, &format, &stride) {
+		_, format, stride, accessible := buffers.access_begin(buffer, .Write)
+		if !accessible {
 			wl.post_error(r, u32(p.Zwlr_Screencopy_Frame_V1_Error.invalid_buffer), "buffer is not writable"); return
 		}
-		wlr.buffer_access_end(buffer)
-		if format != gbm.ARGB8888 || stride != uint(f.box.width)*4 { wl.post_error(r, u32(p.Zwlr_Screencopy_Frame_V1_Error.invalid_buffer), "invalid buffer layout"); return }
+		buffers.access_end(buffer)
+		if format != gbm.ARGB8888 || stride != int(f.box.width)*4 { wl.post_error(r, u32(p.Zwlr_Screencopy_Frame_V1_Error.invalid_buffer), "invalid buffer layout"); return }
 		accepted, f.used, f.with_damage, f.buffer = true, true, request == .copy_with_damage, buffer
 		o := sp.get_scene_output(f.manager.scene, f.output)
 		if o != nil && o.last != nil && !f.with_damage { screencopy_copy(f, o) } else {
@@ -159,7 +159,7 @@ screencopy_release :: proc(f: ^Screencopy_Frame) {
 	wl.unlisten(&f.destroy)
 	wl.unlisten(&f.commit)
 	f.output = nil
-	if f.buffer != nil { wlr.buffer_release(f.buffer); f.buffer = nil }
+	if f.buffer != nil { buffers.unlock(f.buffer); f.buffer = nil }
 	f.done = true
 }
 screencopy_failed :: proc(f: ^Screencopy_Frame) {
@@ -212,15 +212,13 @@ screencopy_copy :: proc(f: ^Screencopy_Frame, o: ^sp.Output) {
 	if b == nil || !o.handle.enabled || box.x+box.width > b.width || box.y+box.height > b.height {
 		screencopy_failed(f); return
 	}
-	data: rawptr
-	format: u32
-	stride: uint
-	if !wlr.buffer_access(f.buffer, wlr.WLR_BUFFER_DATA_PTR_ACCESS_WRITE, &data, &format, &stride) {
+	data, format, stride, accessible := buffers.access_begin(f.buffer, .Write)
+	if !accessible {
 		screencopy_failed(f); return
 	}
-	ok := format == gbm.ARGB8888 && stride == uint(box.width)*4 &&
+	ok := format == gbm.ARGB8888 && stride == int(box.width)*4 &&
 		gles.read_region(o.renderer, b, data, u32(stride), gles.Box(box))
-	wlr.buffer_access_end(f.buffer)
+	buffers.access_end(f.buffer)
 	if !ok { screencopy_failed(f); return }
 	r := f.resource
 	wl.post(r, u32(p.Zwlr_Screencopy_Frame_V1_Event.flags), wl.Uint(0))

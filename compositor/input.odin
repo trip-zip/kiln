@@ -1,5 +1,7 @@
 package compositor
 
+import sf "../surfaces"
+
 import st "../seat"
 
 import sh "../shells"
@@ -196,7 +198,7 @@ keyboard_destroy :: proc (listener: ^wl.Listener, data: rawptr) {
 	free(kb)
 }
 
-hit_test :: proc(s: ^Server, x, y: f64) -> (surface: ^wlr.wlr_surface, view: ^View, sx, sy: f64) {
+hit_test :: proc(s: ^Server, x, y: f64) -> (surface: ^sf.Surface, view: ^View, sx, sy: f64) {
 	handle := wlr.wlr_output_layout_output_at(s.layout, x, y)
 	for output in s.outputs {
 		if output.handle != handle || !output.handle.enabled {continue}
@@ -469,11 +471,11 @@ valid_motion :: proc(s: ^Server, e: ^vm.Event) -> bool {
 	return true
 }
 
-popup_pointer_allowed :: proc(s: ^Server, surface: ^wlr.Surface) -> bool {
+popup_pointer_allowed :: proc(s: ^Server, surface: ^sf.Surface) -> bool {
 	client := sh.grab_client(s.shell)
 	return client == nil || (surface != nil && surface.resource.client == client)
 }
-popup_press :: proc(s: ^Server, surface: ^wlr.Surface) -> bool {
+popup_press :: proc(s: ^Server, surface: ^sf.Surface) -> bool {
 	if popup_pointer_allowed(s, surface) {return false}
 	sh.grab_dismiss(s.shell)
 	return true

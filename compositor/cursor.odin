@@ -1,11 +1,12 @@
 package compositor
 
+import sf "../surfaces"
+
 import st "../seat"
 
 import sp "../scene_paint"
 import wl "../wayland"
 import wlr "../wlroots"
-import "base:runtime"
 import "core:math"
 
 cursor_sync :: proc(s: ^Server) {
@@ -37,7 +38,7 @@ cursor_sync :: proc(s: ^Server) {
 	}
 }
 
-cursor_surface_set :: proc(s: ^Server, surface: ^wlr.wlr_surface, hx, hy: i32) {
+cursor_surface_set :: proc(s: ^Server, surface: ^sf.Surface, hx, hy: i32) {
 	wl.unlisten(&s.cursor_surface_destroy)
 	wl.unlisten(&s.cursor_surface_commit)
 	s.cursor_surface, s.cursor_hx, s.cursor_hy = surface, hx, hy
@@ -48,14 +49,12 @@ cursor_surface_set :: proc(s: ^Server, surface: ^wlr.wlr_surface, hx, hy: i32) {
 	cursor_sync(s)
 }
 
-cursor_surface_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+cursor_surface_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	s := wl.owner(listener, Server, "cursor_surface_destroy")
 	cursor_surface_set(s, nil, 0, 0)
 }
 
-cursor_surface_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+cursor_surface_committed :: proc (listener: ^wl.Listener, data: rawptr) {
 	s := wl.owner(listener, Server, "cursor_surface_commit")
 	s.cursor_hx -= s.cursor_surface.current.dx
 	s.cursor_hy -= s.cursor_surface.current.dy

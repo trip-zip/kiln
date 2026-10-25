@@ -1,8 +1,9 @@
 package extensions
 
+import sf "../surfaces"
+
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 
 Idle_Inhibit_Manager :: struct {
@@ -14,7 +15,7 @@ Idle_Inhibit_Manager :: struct {
 Idle_Inhibitor :: struct {
 	manager: ^Idle_Inhibit_Manager,
 	resource: ^wl.Resource,
-	surface: ^wlr.wlr_surface,
+	surface: ^sf.Surface,
 	events: struct { destroy: wl.Signal },
 	destroy: wl.Listener,
 }

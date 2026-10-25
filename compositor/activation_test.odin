@@ -1,5 +1,7 @@
 package compositor
 
+import sf "../surfaces"
+
 import st "../seat"
 
 import sh "../shells"
@@ -9,7 +11,6 @@ import ext "../extensions"
 import "core:testing"
 import "core:strings"
 import wl "../wayland"
-import wlr "../wlroots"
 import vm "../lua_runtime"
 
 @(test)
@@ -26,7 +27,7 @@ activation_owns_payload_and_retires_mints :: proc(t: ^testing.T) {
         runtime_retire_token(&s,token)
         testing.expect_value(t,len(s.minted_tokens),0)
     }
-    surface:wlr.wlr_surface
+    surface:sf.Surface
     top:=sh.Toplevel{surface=&surface}
     v:=View{id=42,server=&s,protocol=&top,mapped=true}
     append(&s.views,&v)

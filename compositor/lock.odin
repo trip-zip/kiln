@@ -206,20 +206,17 @@ lock_surface_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	sh.lock_configure(p.handle, p.width, p.height)
 	lock_cover(s)
 }
-lock_surface_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+lock_surface_committed :: proc (listener: ^wl.Listener, data: rawptr) {
 	p := wl.owner(listener, Lock_Surface, "commit")
 	if o := sp.get_scene_output(p.server.scene, p.handle.output);
 	   o != nil {sp.output_invalidate(o)}
 }
-lock_surface_mapped :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+lock_surface_mapped :: proc (listener: ^wl.Listener, data: rawptr) {
 	p := wl.owner(listener, Lock_Surface, "map_")
 	lock_cover(p.server)
 	lock_focus(p.server)
 }
-lock_surface_unmapped :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+lock_surface_unmapped :: proc (listener: ^wl.Listener, data: rawptr) {
 	p := wl.owner(listener, Lock_Surface, "unmap")
 	lock_cover(p.server)
 	lock_focus(p.server)

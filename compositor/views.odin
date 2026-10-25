@@ -1,5 +1,7 @@
 package compositor
 
+import sf "../surfaces"
+
 import st "../seat"
 
 import sh "../shells"
@@ -94,8 +96,7 @@ view_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	wl.listen(&toplevel.events.set_app_id, &view.app_id, view_app_id)
 }
 
-view_map :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+view_map :: proc (listener: ^wl.Listener, data: rawptr) {
 	view := wl.owner(listener, View, "map_")
 	view.mapped = true
 	view.map_epoch += 1
@@ -108,8 +109,7 @@ view_map :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	fmt.printf("Mapped toplevel: %s\n", view_title_text(view))
 }
 
-view_unmap :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+view_unmap :: proc (listener: ^wl.Listener, data: rawptr) {
 	view := wl.owner(listener, View, "unmap")
 	foreign_destroy(view)
 	queue_client(view, "unmap")
@@ -124,8 +124,7 @@ view_unmap :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	if s.focused == view {clear_focus(s)}
 }
 
-view_commit :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+view_commit :: proc (listener: ^wl.Listener, data: rawptr) {
 	view := wl.owner(listener, View, "commit")
 	if view.output != nil {
 		if t := xdg(view); t != nil { sp.client_damage(&view.output.paint, view.id, &t.geometry) }
@@ -229,7 +228,7 @@ view_app_id :: proc(listener: ^wl.Listener, data: rawptr) {
 	queue_client(v, "metadata")
 }
 
-enter_surface :: proc(s: ^Server, target: ^wlr.wlr_surface) {
+enter_surface :: proc(s: ^Server, target: ^sf.Surface) {
 	surface := target
 	if grabbed := sh.grab_surface(s.shell); grabbed != nil {surface = grabbed}
 	if locked(s) {return}

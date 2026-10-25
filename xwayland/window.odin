@@ -122,11 +122,11 @@ window_associate :: proc(w: ^Window, s: ^Surface) {
 window_map :: proc(w: ^Window) {
 	if w.mapped && w.surface != nil && has_buffer(w.surface) && !surface_mapped(w.surface) { append(&w.xwm.mapped_windows,w); map_surface(w.surface); client_list(w.xwm) }
 }
-window_surface_destroy :: proc "c" (l: ^wl.Listener, data: rawptr) {
+window_surface_destroy :: proc (l: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context(); w := wl.owner(l,Window,"surface_destroy"); context = w.xwm.server.display.loop.ctx
 	window_dissociate(w)
 }
-window_surface_commit :: proc "c" (l: ^wl.Listener, data: rawptr) {
+window_surface_commit :: proc (l: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context(); w := wl.owner(l,Window,"surface_commit"); context = w.xwm.server.display.loop.ctx
 	window_map(w)
 }

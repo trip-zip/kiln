@@ -1,5 +1,7 @@
 package compositor
 
+import sf "../surfaces"
+
 import xw "../xwayland"
 
 import sh "../shells"
@@ -11,7 +13,6 @@ import sp "../scene_paint"
 import images "../images"
 import vm "../lua_runtime"
 import wl "../wayland"
-import wlr "../wlroots"
 import xcb "../xcb"
 import ewmh "../xcb_ewmh"
 
@@ -21,7 +22,7 @@ import "core:strings"
 X11_View :: struct {
 	view:                                                                                  ^View,
 	handle:                                                                                ^xw.Window,
-	surface:                                                                               ^wlr.wlr_surface,
+	surface:                                                                               ^sf.Surface,
 	associate, dissociate, configure, activate, geometry:                                  wl.Listener,
 	role, icon:                                                                            string,
 	role_changed, icon_changed, hints_changed, types_changed, parent_changed, map_request: wl.Listener,

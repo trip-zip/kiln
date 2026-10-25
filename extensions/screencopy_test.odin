@@ -1,5 +1,7 @@
 package extensions
 
+import "../buffers"
+
 import "../gles"
 import paint "../paint"
 import p "../protocols"
@@ -77,7 +79,9 @@ capture_setup :: proc(t: ^testing.T, version: u32 = 3) -> ^Capture_Test {
 	s.display = wl.create()
 	s.backend = wlr_headless_backend_create(s.display.loop)
 	s.renderer = gles.create(wlr.backend_fd(s.backend))
-	assert(s.renderer != nil && gles.buffer_globals(s.renderer, s.display))
+	assert(s.renderer != nil)
+	shm_formats, dmabuf_formats, device, formats_ok := gles.buffer_formats(s.renderer)
+	assert(formats_ok && buffers.create_globals(s.display, shm_formats, dmabuf_formats, device, s.renderer.fd))
 	s.output = wlr_headless_add_output(s.backend, 16, 12)
 	assert(wlr.wlr_backend_start(s.backend))
 	s.layout = wlr.wlr_output_layout_create(s.display)

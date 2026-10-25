@@ -1,12 +1,13 @@
 package compositor
 
+import sf "../surfaces"
+
 import sh "../shells"
 
 import clay "../clay"
 import layout "../layout"
 import vm "../lua_runtime"
 import sp "../scene_paint"
-import wlr "../wlroots"
 import "core:testing"
 
 @(test)
@@ -62,7 +63,7 @@ reconcile_keeps_borrowed_client_identity :: proc(t: ^testing.T) {
 	}
 	defer {clear_chrome(&output)
 		sp.output_finish(&output.paint)}
-	surface: wlr.Surface
+	surface: sf.Surface
 	top := sh.Toplevel {
 		surface = &surface,
 	}

@@ -2,7 +2,6 @@ package xwayland
 
 import wl "../wayland"
 import p "../protocols"
-import "base:runtime"
 
 Shell_Surface :: struct {
 	server: ^Server,
@@ -64,8 +63,7 @@ pair_window :: proc(w: ^Window) {
 		if s.committed && s.serial == w.serial && s.window == nil { s.window = w; window_associate(w, s.surface); return }
 	}
 }
-shell_surface_destroy :: proc "c" (l: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+shell_surface_destroy :: proc (l: ^wl.Listener, data: rawptr) {
 	s := wl.owner(l, Shell_Surface, "destroy"); context = s.server.display.loop.ctx
 	shell_retire(s)
 }

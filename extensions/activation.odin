@@ -1,10 +1,11 @@
 package extensions
 
+import sf "../surfaces"
+
 import st "../seat"
 
 import p "../protocols"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:strings"
 import "core:sys/linux"
@@ -21,7 +22,7 @@ Activation_Token :: struct {
 	manager: ^Activation,
 	resource: ^wl.Resource,
 	seat: ^st.Seat,
-	surface: ^wlr.wlr_surface,
+	surface: ^sf.Surface,
 	app_id: cstring,
 	name: [33]u8,
 	serial: u32,
@@ -30,7 +31,7 @@ Activation_Token :: struct {
 	events: struct { destroy: wl.Signal },
 	seat_destroy, surface_destroy: wl.Listener,
 }
-Activation_Event :: struct { activation: ^Activation, token: ^Activation_Token, surface: ^wlr.wlr_surface }
+Activation_Event :: struct { activation: ^Activation, token: ^Activation_Token, surface: ^sf.Surface }
 activation_create :: proc(display: ^wl.Display) -> ^Activation {
 	context = display.loop.ctx
 	m := new(Activation)

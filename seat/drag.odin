@@ -1,16 +1,16 @@
 package seat
 
+import sf "../surfaces"
+
 import wl "../wayland"
 import p "../protocols"
-import wlr "../wlroots"
-import "base:runtime"
 
-Drag_Icon :: struct { surface: ^wlr.Surface, drag: ^Drag, events: struct { destroy: wl.Signal }, destroy: wl.Listener }
+Drag_Icon :: struct { surface: ^sf.Surface, drag: ^Drag, events: struct { destroy: wl.Signal }, destroy: wl.Listener }
 Drag :: struct {
 	seat: ^Seat,
 	client: ^Client,
 	source: ^Source,
-	origin, focus: ^wlr.Surface,
+	origin, focus: ^sf.Surface,
 	icon: ^Drag_Icon,
 	serial, button: u32,
 	external_accepted: bool,
@@ -20,10 +20,10 @@ Drag :: struct {
 	client_destroy, origin_destroy, focus_destroy: wl.Listener,
 }
 Drag_Motion :: struct { time: u32, sx, sy: f64 }
-Drag_Event :: struct { drag: ^Drag, origin: ^wlr.Surface, serial: u32 }
+Drag_Event :: struct { drag: ^Drag, origin: ^sf.Surface, serial: u32 }
 drag_icon_assign: proc(^Drag_Icon, ^wl.Resource) -> bool
 drag_icon_forget: proc(^Drag_Icon)
-drag_request :: proc(d: ^Device, source: ^Source, origin, icon: ^wlr.Surface, serial: u32) {
+drag_request :: proc(d: ^Device, source: ^Source, origin, icon: ^sf.Surface, serial: u32) {
 	if source != nil && (source.use != .Unused || source.cancelled || source.finished) { wl.post_error(d.resource, u32(p.Wl_Data_Device_Error.used_source), "source was already used"); return }
 	c := d.client
 	if c == nil { return }
@@ -51,13 +51,11 @@ start_pointer_drag :: proc(s: ^Seat, drag: ^Drag, serial: u32) {
 	wl.signal_emit_mutable(&s.events.start_drag, drag)
 }
 drag_client_destroy :: proc(l: ^wl.Listener, data: rawptr) { drag_cancel(wl.owner(l, Drag, "client_destroy").seat) }
-drag_origin_destroy :: proc "c" (l: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+drag_origin_destroy :: proc (l: ^wl.Listener, data: rawptr) {
 	d := wl.owner(l, Drag, "origin_destroy"); context = d.seat.display.loop.ctx
 	drag_cancel(d.seat)
 }
-drag_icon_surface_destroy :: proc "c" (l: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+drag_icon_surface_destroy :: proc (l: ^wl.Listener, data: rawptr) {
 	i := wl.owner(l, Drag_Icon, "destroy"); context = i.drag.seat.display.loop.ctx
 	drag_icon_destroy(i)
 }
@@ -68,8 +66,7 @@ drag_icon_destroy :: proc(i: ^Drag_Icon) {
 	wl.signal_emit_final(&i.events.destroy, i)
 	free(i)
 }
-drag_focus_destroy :: proc "c" (l: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+drag_focus_destroy :: proc (l: ^wl.Listener, data: rawptr) {
 	d := wl.owner(l, Drag, "focus_destroy"); context = d.seat.display.loop.ctx
 	drag_enter(d, nil, 0, 0)
 }
@@ -79,7 +76,7 @@ drag_leave :: proc(d: ^Drag, dropped := false) {
 	clear(&d.devices); clear(&d.offers)
 	wl.unlisten(&d.focus_destroy); d.focus = nil; d.external_accepted = false
 }
-drag_enter :: proc(d: ^Drag, surface: ^wlr.Surface, sx, sy: f64) {
+drag_enter :: proc(d: ^Drag, surface: ^sf.Surface, sx, sy: f64) {
 	if d.focus == surface { return }
 	drag_leave(d)
 	defer wl.signal_emit_mutable(&d.events.focus, d)

@@ -1,5 +1,7 @@
 package compositor
 
+import sf "../surfaces"
+
 import p "../protocols"
 import sp "../scene_paint"
 import sh "../shells"
@@ -133,7 +135,7 @@ owned_popups_reposition_nested_coordinates_and_no_configure_loop :: proc(t: ^tes
 	positions := make([dynamic]sp.Surface_Position); defer delete(positions)
 	sh.popups(
 		xdg(s.views[0]).surface,
-		proc(surface: ^wlr.Surface, x, y: i32, data: rawptr) {append(
+		proc(surface: ^sf.Surface, x, y: i32, data: rawptr) {append(
 				cast(^[dynamic]sp.Surface_Position)data,
 				sp.Surface_Position{surface = surface, x = x, y = y},
 			)},

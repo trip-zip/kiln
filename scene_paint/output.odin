@@ -1,5 +1,7 @@
 package scene_paint
 
+import sf "../surfaces"
+
 import wl "../wayland"
 import wlr "../wlroots"
 import "base:runtime"
@@ -184,7 +186,7 @@ draw_parts :: proc(
 	o: ^Output,
 	pass: ^gles.Pass,
 	repaint: []wlr.Box,
-	drawn: ^[dynamic]^wlr.Surface,
+	drawn: ^[dynamic]^sf.Surface,
 ) -> bool {
 	transform := gles.transform_invert(o.transform)
 	items := draw_order(o)
@@ -222,7 +224,7 @@ draw_parts :: proc(
 				gles.transform_invert(v.surface.current.transform),
 				transform,
 			)
-			if !draw_texture( o, pass, texture, wlr.surface_source(v.surface), box, visible, t, repaint, ) {
+			if !draw_texture( o, pass, texture, wlr.wlr_fbox(sf.source_box(v.surface)), box, visible, t, repaint, ) {
 				return false
 			}
 			append(drawn, v.surface)
@@ -255,7 +257,7 @@ output_commit :: proc(o: ^Output) -> bool {
 	pass, begun := gles.begin(target_buffer(buffer), o.gamma)
 	if !begun {return false}
 	for box in repaint {gles.clear(&pass, box)}
-	drawn_surfaces := make([dynamic]^wlr.Surface, context.temp_allocator)
+	drawn_surfaces := make([dynamic]^sf.Surface, context.temp_allocator)
 	for e in o.subscriptions {e.visible = false}
 	drawn := draw_parts(o, &pass, repaint[:], &drawn_surfaces)
 	cursor_drawn := draw_cursor(o, &pass, repaint[:], &drawn_surfaces)
@@ -278,7 +280,7 @@ output_commit :: proc(o: ^Output) -> bool {
 
 	now: posix.timespec
 	posix.clock_gettime(.MONOTONIC, &now)
-	for surface in drawn_surfaces {wlr.surface_frame_done(surface, &now)}
+	for surface in drawn_surfaces {sf.frame_done(surface, &now)}
 	return true
 }
 

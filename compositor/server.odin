@@ -1,5 +1,9 @@
 package compositor
 
+import "../buffers"
+
+import sf "../surfaces"
+
 import xw "../xwayland"
 
 import st "../seat"
@@ -55,7 +59,7 @@ Server :: struct {
 	session:                                                                              ^wlr.wlr_session,
 	session_active, session_destroy:                                                      wl.Listener,
 	gles:                                                                                 ^gles.Renderer,
-	cursor_surface:                                                                       ^wlr.wlr_surface,
+	cursor_surface:                                                                       ^sf.Surface,
 	cursor_hx, cursor_hy:                                                                 i32,
 	cursor_surface_destroy, cursor_surface_commit:                                        wl.Listener,
 	scene:                                                                                ^sp.Scene,
@@ -84,7 +88,7 @@ Server :: struct {
 	cursor_named:                                                                         bool,
 	next_pointer:                                                                         u64,
 	popup_grab, popup_previous_destroy: wl.Listener,
-	popup_previous: ^wlr.Surface,
+	popup_previous: ^sf.Surface,
 	popup_grab_active: bool,
 	new_toplevel, new_popup, new_input:                                                   wl.Listener,
 	request_cursor, request_selection:                                                    wl.Listener,
@@ -239,11 +243,12 @@ run :: proc(startup_command := "") -> bool {
 	s.gles = gles.create(wlr.backend_fd(s.backend))
 	if s.gles == nil {return false}
 	fmt.printf("Renderer: GLES %s; native session: %v\n", gles.name(s.gles), s.session != nil)
-	if !gles.buffer_globals(s.gles, s.display) {return false}
-	compositor := wlr.wlr_compositor_create(s.display, 5, nil)
+	shm_formats, dmabuf_formats, device, formats_ok := gles.buffer_formats(s.gles)
+	if !formats_ok || !buffers.create_globals(s.display, shm_formats, dmabuf_formats, device, s.gles.fd) {return false}
+	compositor := sf.compositor_create(s.display, 5)
 	if compositor == nil {return false}
-	if wlr.wlr_subcompositor_create(s.display) == nil {return false}
-	if !wlr.density_protocols_create(s.display) {return false}
+	if sf.subcompositor_create(s.display) == nil {return false}
+	if sf.viewporter_create(s.display) == nil || sf.fractional_scale_create(s.display) == nil {return false}
 	s.layout = wlr.wlr_output_layout_create(s.display)
 	if s.layout == nil {return false}
 	wl.listen(&s.layout.events.change, &s.layout_change, output_layout_changed)

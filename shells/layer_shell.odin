@@ -1,5 +1,7 @@
 package shells
 
+import sf "../surfaces"
+
 import p "../protocols"
 import wl "../wayland"
 import wlr "../wlroots"
@@ -31,7 +33,7 @@ Layer_Configure :: struct {
 Layer_Surface :: struct {
 	resource, owner:                                    ^wl.Resource,
 	shell:                                              ^Layer_Shell,
-	surface:                                            ^wlr.Surface,
+	surface:                                            ^sf.Surface,
 	output:                                             ^wlr.wlr_output,
 	namespace:                                          string,
 	current, pending:                                   Layer_State,

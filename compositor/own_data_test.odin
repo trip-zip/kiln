@@ -1,8 +1,9 @@
 package compositor
 
+import sf "../surfaces"
+
 import st "../seat"
 import wl "../wayland"
-import wlr "../wlroots"
 import p "../protocols"
 import "core:sys/linux"
 import "core:testing"
@@ -13,7 +14,7 @@ data_bind :: proc(c: ^Extension_Client, primary: bool, version: u32 = 3) {
 	extension_text_request(c,9,0,"text/plain")
 	extension_pump(c)
 }
-data_surface :: proc(c: ^Extension_Client) -> ^wlr.Surface { return wlr.wlr_surface_from_resource(wl.client_get_object(c.client,6)) }
+data_surface :: proc(c: ^Extension_Client) -> ^sf.Surface { return sf.of(wl.client_get_object(c.client,6)) }
 data_selection :: proc(s: ^Server, c: ^Extension_Client, primary: bool) -> []u8 {
 	st.keyboard_notify_enter(s.seat,data_surface(c))
 	st.keyboard_notify_key(s.seat,1,30,1)

@@ -1,8 +1,9 @@
 package scene_paint
 
+import "../buffers"
+
 import layout "../layout"
 import paint "../paint"
-import wlr "../wlroots"
 import "core:fmt"
 import "core:math"
 import "core:strings"
@@ -87,7 +88,7 @@ add_buffer :: proc(n: ^Node, s: paint.Surface, x, y, w, h: i32) -> bool {
 destroy :: proc(n: ^Node) {
 	if n == nil {return}
 	for b in n.buffers {
-		wlr.wlr_buffer_unlock(&b.base)
+		buffers.unlock(&b.base)
 	}
 	delete(n.buffers)
 	delete(n.parts)

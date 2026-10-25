@@ -1,5 +1,7 @@
 package compositor
 
+import sf "../surfaces"
+
 import st "../seat"
 
 import ext "../extensions"
@@ -65,12 +67,14 @@ extension_server :: proc() -> ^Server {
 	s.display = wl.create()
 	s.seat = st.create(s.display, "extension-test")
 	st.set_capabilities(s.seat, 1)
-	assert(wlr.wlr_compositor_create(s.display, 6, nil) != nil)
+	assert(sf.compositor_create(s.display, 6) != nil)
 	return s
 }
 extension_finish :: proc(s: ^Server) {
 	s.shutting_down = true
 	wl.destroy_clients(s.display)
+	// Unmap callbacks invalidate leaves even in fixtures without initialized layouts.
+	for o in s.outputs { delete(o.ui.hidden); o.ui.hidden = nil }
 	wl.unlisten(&s.new_constraint); wl.unlisten(&s.pointer_focus_change)
 	delete(s.constraint_owners)
 	wl.unlisten(&s.new_idle_inhibitor)

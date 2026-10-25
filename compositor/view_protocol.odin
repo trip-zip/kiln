@@ -1,5 +1,7 @@
 package compositor
 
+import sf "../surfaces"
+
 import xw "../xwayland"
 
 import sh "../shells"
@@ -9,7 +11,7 @@ import wlr "../wlroots"
 
 xdg :: proc(v: ^View) -> ^sh.Toplevel { t,_:=v.protocol.(^sh.Toplevel);return t }
 x11 :: proc(v: ^View) -> ^X11_View { x,_:=v.protocol.(^X11_View);return x }
-view_surface :: proc(v: ^View) -> ^wlr.wlr_surface {
+view_surface :: proc(v: ^View) -> ^sf.Surface {
     if t:=xdg(v);t!=nil { return t.surface }
     if x:=x11(v);x!=nil { return x.surface }
     return nil

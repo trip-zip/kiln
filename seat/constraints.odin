@@ -1,9 +1,10 @@
 package seat
 
+import sf "../surfaces"
+
 import wl "../wayland"
 import p "../protocols"
-import wlr "../wlroots"
-import "base:runtime"
+import rg "../region"
 import "core:math"
 
 Constraint_Manager :: struct {
@@ -14,7 +15,7 @@ Constraint_Manager :: struct {
 	destroy: wl.Listener,
 }
 Constraint_State :: struct {
-	region: []wlr.pixman_box32_t,
+	region: []rg.Box,
 	explicit_region: bool,
 	cursor_hint: struct { enabled: bool, x, y: f64 },
 }
@@ -22,12 +23,12 @@ Constraint :: struct {
 	manager: ^Constraint_Manager,
 	resource: ^wl.Resource,
 	seat: ^Seat,
-	surface: ^wlr.Surface,
+	surface: ^sf.Surface,
 	type: i32,
 	lifetime: u32,
 	active, defunct, region_pending, hint_pending: bool,
 	current, pending: Constraint_State,
-	region: [dynamic]wlr.pixman_box32_t,
+	region: [dynamic]rg.Box,
 	events: struct { set_region, destroy: wl.Signal },
 	commit, surface_destroy, seat_destroy: wl.Listener,
 }
@@ -48,7 +49,7 @@ constraints_destroy :: proc(l: ^wl.Listener, data: rawptr) {
 	for len(m.bindings)>0 { wl.resource_destroy(m.bindings[len(m.bindings)-1]) }
 	wl.global_destroy(m.global); delete(m.constraints); delete(m.bindings); free(m)
 }
-constraint_for :: proc(m: ^Constraint_Manager, surface: ^wlr.Surface, s: ^Seat) -> ^Constraint {
+constraint_for :: proc(m: ^Constraint_Manager, surface: ^sf.Surface, s: ^Seat) -> ^Constraint {
 	if m != nil { for c in m.constraints { if !c.defunct && c.surface == surface && c.seat == s { return c } } }
 	return nil
 }
@@ -92,8 +93,7 @@ constraint_resource_destroy :: proc(r: ^wl.Resource) {
 	delete(c.current.region); delete(c.pending.region); delete(c.region); free(c)
 }
 constraint_seat_destroy :: proc(l: ^wl.Listener, data: rawptr) { constraint_retire(wl.owner(l, Constraint, "seat_destroy")) }
-constraint_surface_destroy :: proc "c" (l: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+constraint_surface_destroy :: proc (l: ^wl.Listener, data: rawptr) {
 	c := wl.owner(l, Constraint, "surface_destroy"); context = c.seat.display.loop.ctx
 	constraint_retire(c)
 }
@@ -115,8 +115,7 @@ locked_request :: proc(r: ^wl.Resource, request: p.Zwp_Locked_Pointer_V1_Request
 confined_request :: proc(r: ^wl.Resource, request: p.Zwp_Confined_Pointer_V1_Request, args: []wl.Argument) {
 	switch request { case .destroy: wl.resource_destroy(r); case .set_region: constraint_set_region(cast(^Constraint)r.data, wl.object(args[0])) }
 }
-constraint_committed :: proc "c" (l: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+constraint_committed :: proc (l: ^wl.Listener, data: rawptr) {
 	c := wl.owner(l, Constraint, "commit"); context = c.seat.display.loop.ctx
 	if c.region_pending {
 		delete(c.current.region)
@@ -132,8 +131,8 @@ constraint_update_region :: proc(c: ^Constraint) {
 	input := surface_input_rectangles(c.surface)
 	if !c.current.explicit_region { append(&c.region, ..input); return }
 	for a in input { for b in c.current.region {
-		r := wlr.pixman_box32_t{max(a.x1,b.x1),max(a.y1,b.y1),min(a.x2,b.x2),min(a.y2,b.y2)}
-		if r.x1<r.x2 && r.y1<r.y2 { append(&c.region,r) }
+		r := rg.intersection(a,b)
+		if r.width>0 && r.height>0 { append(&c.region,r) }
 	} }
 }
 constraint_activate :: proc(c: ^Constraint) {
@@ -145,21 +144,21 @@ constraint_deactivate :: proc(c: ^Constraint) {
 	c.active = false; wl.post(c.resource, 1)
 	if c.lifetime == 1 { constraint_retire(c) }
 }
-region_contains :: proc(rects: []wlr.pixman_box32_t, x,y: f64) -> bool {
-	for r in rects { if x>=f64(r.x1) && x<f64(r.x2) && y>=f64(r.y1) && y<f64(r.y2) { return true } }
+region_contains :: proc(rects: []rg.Box, x,y: f64) -> bool {
+	for r in rects { if x>=f64(r.x) && x<f64((r.x+r.width)) && y>=f64(r.y) && y<f64((r.y+r.height)) { return true } }
 	return false
 }
 constraint_contains :: proc(c: ^Constraint, x,y: f64) -> bool { return region_contains(c.region[:],x,y) }
 // Joining ray intervals preserves passage between adjacent rectangles without crossing holes.
-region_travel :: proc(rects: []wlr.pixman_box32_t, x,y,dx,dy: f64) -> f64 {
+region_travel :: proc(rects: []rg.Box, x,y,dx,dy: f64) -> f64 {
 	reach := f64(0)
 	for _ in 0..=len(rects) {
 		before := reach
 		for r in rects {
 			lo,hi := f64(0),f64(1)
 			for axis in 0..<2 {
-				pos,delta := x,dx; left,right := f64(r.x1),f64(r.x2)
-				if axis==1 { pos,delta,left,right=y,dy,f64(r.y1),f64(r.y2) }
+				pos,delta := x,dx; left,right := f64(r.x),f64((r.x+r.width))
+				if axis==1 { pos,delta,left,right=y,dy,f64(r.y),f64((r.y+r.height)) }
 				if delta==0 { if pos<left || pos>=right { hi = -1 }; continue }
 				a,b := (left-pos)/delta,(right-pos)/delta
 				lo,hi=max(lo,min(a,b)),min(hi,max(a,b))
@@ -170,10 +169,10 @@ region_travel :: proc(rects: []wlr.pixman_box32_t, x,y,dx,dy: f64) -> f64 {
 	}
 	return reach
 }
-region_closest :: proc(rects: []wlr.pixman_box32_t, x,y: f64) -> (f64,f64) {
+region_closest :: proc(rects: []rg.Box, x,y: f64) -> (f64,f64) {
 	best,nx,ny := math.INF_F64,x,y
 	for r in rects {
-		a,b := clamp(x,f64(r.x1),f64(r.x2)-1.0/256),clamp(y,f64(r.y1),f64(r.y2)-1.0/256)
+		a,b := clamp(x,f64(r.x),f64((r.x+r.width))-1.0/256),clamp(y,f64(r.y),f64((r.y+r.height))-1.0/256)
 		d := (a-x)*(a-x)+(b-y)*(b-y)
 		if d<best { best,nx,ny=d,a,b }
 	}

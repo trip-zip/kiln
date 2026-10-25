@@ -83,8 +83,7 @@ popup_constrain :: proc(p: ^Popup, force := false) -> bool {
 	sh.popup_constrain(p.handle, box, force)
 	return true
 }
-popup_commit :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+popup_commit :: proc (listener: ^wl.Listener, data: rawptr) {
 	p := wl.owner(listener, Popup, "commit")
 	_, o, _, _ := root_placement(p.server, p.root)
 	if o != nil {sp.client_damage(&o.paint, p.root)}
@@ -102,14 +101,12 @@ popup_reposition :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	context = runtime.default_context()
 	popup_constrain(wl.owner(listener, Popup, "reposition"))
 }
-popup_map :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+popup_map :: proc (listener: ^wl.Listener, data: rawptr) {
 	p := wl.owner(listener, Popup, "map_")
 	p.mapped = true
 	popup_dirty(p)
 }
-popup_unmap :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+popup_unmap :: proc (listener: ^wl.Listener, data: rawptr) {
 	p := wl.owner(listener, Popup, "unmap")
 	p.mapped = false
 	popup_dirty(p)

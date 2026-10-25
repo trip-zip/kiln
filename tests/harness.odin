@@ -43,6 +43,13 @@ backend_env :: proc(b: Backend, env: ^[dynamic]string) {
 }
 
 boot :: proc(t: ^testing.T, config: string) -> (s: Session, ok: bool) {
+	s, ok = boot_start(t, config)
+	// Cleanup must precede copying the returned Session, including its owned strings.
+	if !ok { stop(&s) }
+	return
+}
+
+boot_start :: proc(t: ^testing.T, config: string) -> (s: Session, ok: bool) {
 	err: os.Error
 	s.work, err = os.make_directory_temp("", "kiln-test-", context.allocator)
 	if !testing.expect(t, err == nil, "temp dir") { return }
@@ -90,8 +97,10 @@ read_log :: proc(s: ^Session) -> string {
 }
 
 running :: proc(s: ^Session) -> bool {
-	state, _ := os.process_wait(s.process, 0)
-	return !state.exited
+	if s.process.pid <= 0 { return false }
+	state, err := os.process_wait(s.process, 0)
+	if state.exited || (err != nil && err != .Timeout) { s.process = {}; return false }
+	return true
 }
 
 wait_until :: proc(t: ^testing.T, done: proc(^Session) -> bool, s: ^Session, what: string, timeout := 10 * time.Second) -> bool {
@@ -162,6 +171,7 @@ quit :: proc(t: ^testing.T, s: ^Session) {
 	if !running(s) { return }
 	expect_eval(t, s, "core.quit()", "\n")
 	state, _ := os.process_wait(s.process, 5 * time.Second)
+	if state.exited { s.process = {} }
 	log := read_log(s)
 	testing.expectf(t, state.exited && state.exit_code == 0, "quit: exited %v code %d\n%s", state.exited, state.exit_code, log)
 	testing.expect(t, !strings.contains(log, "Assertion"), "assertion in log")
@@ -170,13 +180,18 @@ quit :: proc(t: ^testing.T, s: ^Session) {
 
 stop :: proc(s: ^Session) {
 	if running(s) {
-		_ = os.process_kill(s.process)
-		_, _ = os.process_wait(s.process, 5 * time.Second)
+		_ = os.process_terminate(s.process)
+		state, _ := os.process_wait(s.process, 5 * time.Second)
+		if !state.exited {
+			_ = os.process_kill(s.process)
+			_, _ = os.process_wait(s.process, 5 * time.Second)
+		}
 	}
-	os.remove_all(s.work)
+	if s.work != "" { os.remove_all(s.work) }
 	for e in s.env { delete(e) }
 	delete(s.env)
 	delete(s.work)
 	delete(s.sock)
 	delete(s.log)
+	s^ = {}
 }

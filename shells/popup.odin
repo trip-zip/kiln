@@ -1,5 +1,7 @@
 package shells
 
+import sf "../surfaces"
+
 import p "../protocols"
 import wl "../wayland"
 import wlr "../wlroots"
@@ -16,7 +18,7 @@ Popup_Configure :: struct {
 Popup :: struct {
 	resource:                                                           ^wl.Resource,
 	base:                                                               ^Xdg_Surface,
-	surface, parent:                                                    ^wlr.Surface,
+	surface, parent:                                                    ^sf.Surface,
 	scheduled, current, pending:                                        Popup_State,
 	geometry, explicit_geometry, pending_geometry:                      wlr.Box,
 	geometry_changed, initialized, initial_commit, configured, grabbed: bool,
@@ -40,7 +42,7 @@ popup_create :: proc(x: ^Xdg_Surface, args: []wl.Argument) {
 	if !positioner_complete(
 		rules,
 	) {wl.post_error(x.owner, u32(p.Xdg_Wm_Base_Error.invalid_positioner), "positioner is incomplete"); return}
-	parent: ^wlr.Surface
+	parent: ^sf.Surface
 	if r := wl.object(args[1]); r != nil {
 		px := cast(^Xdg_Surface)r.data
 		if px == nil ||
@@ -67,7 +69,7 @@ popup_create :: proc(x: ^Xdg_Surface, args: []wl.Argument) {
 	if parent != nil {popup_parent(v, parent)}
 	wl.signal_emit_mutable(&x.shell.events.new_popup, v)
 }
-popup_parent :: proc(v: ^Popup, parent: ^wlr.Surface) -> bool {
+popup_parent :: proc(v: ^Popup, parent: ^sf.Surface) -> bool {
 	list := popup_list(parent)
 	if v.parent != nil ||
 	   v.initialized ||
@@ -236,7 +238,7 @@ popup_dismiss :: proc(v: ^Popup) {
 	wl.post(v.resource, u32(p.Xdg_Popup_Event.popup_done))
 	popup_retire(v)
 }
-dismiss_children :: proc(surface: ^wlr.Surface) {
+dismiss_children :: proc(surface: ^sf.Surface) {
 	if list := popup_list(surface);
 	   list != nil {for len(list^) > 0 {popup_dismiss(list^[len(list^) - 1])}}
 }
@@ -264,9 +266,9 @@ popup_constrain :: proc(v: ^Popup, bounds: wlr.Box, force: bool) {
 	geometry := positioner_unconstrain(v.scheduled.rules, constraint)
 	if force || geometry != v.scheduled.geometry {unconstrain_from_box(v, bounds)}
 }
-Surface_Iterator :: #type proc(_: ^wlr.Surface, _: i32, _: i32, _: rawptr)
+Surface_Iterator :: #type proc(_: ^sf.Surface, _: i32, _: i32, _: rawptr)
 popups :: proc(
-	surface: ^wlr.Surface,
+	surface: ^sf.Surface,
 	iterator: Surface_Iterator,
 	data: rawptr,
 	x := i32(0),
@@ -293,7 +295,7 @@ popups :: proc(
 grab_client :: proc(s: ^Shell) -> ^wl.Client {return(
 		s.grab_seat.client if s != nil && s.grab_seat != nil else nil \
 	)}
-grab_surface :: proc(s: ^Shell) -> ^wlr.Surface {return(
+grab_surface :: proc(s: ^Shell) -> ^sf.Surface {return(
 		s.grab_chain[0].surface if s != nil && len(s.grab_chain) > 0 else nil \
 	)}
 popup_grab :: proc(v: ^Popup, seat_resource: ^wl.Resource, serial: u32) {

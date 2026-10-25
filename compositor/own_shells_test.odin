@@ -1,5 +1,9 @@
 package compositor
 
+import "../buffers"
+
+import sf "../surfaces"
+
 import sh "../shells"
 import p "../protocols"
 import wl "../wayland"
@@ -19,7 +23,7 @@ shell_test_server :: proc() -> ^Server {
 	assert(m != nil)
 	wl.listen(&m.events.new_toplevel_decoration, &s.new_decoration, decoration_added)
 	formats := [2]u32{0x34325241, 0x34325258}
-	assert(wlr.wlr_shm_create(s.display, 1, &formats[0], 2) != nil)
+	assert(buffers.shm_create(s.display, 1, formats[:]) != nil)
 	return s
 }
 shell_test_finish :: proc(s: ^Server) {
@@ -242,7 +246,7 @@ owned_decorations_force_server_mode_and_validate_lifetime :: proc(t: ^testing.T)
 owned_toplevel_geometry_includes_subsurfaces_and_latches_explicit_bounds :: proc(t: ^testing.T) {
 	s := shell_test_server()
 	defer shell_test_finish(s)
-	assert(wlr.wlr_subcompositor_create(s.display) != nil)
+	assert(sf.subcompositor_create(s.display) != nil)
 	c := shell_test_client(s)
 	defer wl.connection_close(&c.peer)
 	serial := shell_test_initial(t, &c)

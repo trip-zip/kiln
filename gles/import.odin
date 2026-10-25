@@ -2,16 +2,14 @@ package gles
 
 import "../gbm"
 import wl "../wayland"
-import wlr "../wlroots"
-import "base:runtime"
-import "core:c"
+import "../buffers"
 import "core:fmt"
 import gl "vendor:OpenGL"
 import egl "vendor:egl"
 
 Texture :: struct {
 	renderer:      ^Renderer,
-	buffer:        ^wlr.wlr_buffer,
+	buffer:        ^buffers.Buffer,
 	destroy:       wl.Listener,
 	name:          u32,
 	image:         egl.Image,
@@ -31,8 +29,7 @@ texture_destroy :: proc(t: ^Texture) {
 	free(t)
 }
 
-texture_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+texture_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	t := wl.owner(listener, Texture, "destroy")
 	context.allocator = t.renderer.allocator
 	wl.unlisten(listener)
@@ -77,7 +74,7 @@ rgb :: proc(r: ^Renderer, format: u32) -> bool {
 	return false
 }
 // The cache borrows the buffer until its destroy signal ends the import lifetime.
-import_buffer :: proc(r: ^Renderer, b: ^wlr.wlr_buffer) -> ^Texture {
+import_buffer :: proc(r: ^Renderer, b: ^buffers.Buffer) -> ^Texture {
 	if b == nil || !current(r) {return nil}
 	if t := r.textures[rawptr(b)]; t != nil {return t}
 	context.allocator = r.allocator
@@ -91,8 +88,7 @@ import_buffer :: proc(r: ^Renderer, b: ^wlr.wlr_buffer) -> ^Texture {
 	defer {
 		if !ok {texture_destroy(t)}
 	}
-	attrs: wlr.wlr_dmabuf_attributes
-	if wlr.buffer_dmabuf(b, &attrs) {
+	if attrs, has_dmabuf := buffers.dmabuf(b); has_dmabuf {
 		if attrs.n_planes < 1 || attrs.n_planes > 4 || !rgb(r, attrs.format) {
 			reject(r, attrs.format)
 			return nil
@@ -125,7 +121,7 @@ import_buffer :: proc(r: ^Renderer, b: ^wlr.wlr_buffer) -> ^Texture {
 	ok = true
 	return t
 }
-update :: proc(r: ^Renderer, b: ^wlr.wlr_buffer, boxes: []Box) {
+update :: proc(r: ^Renderer, b: ^buffers.Buffer, boxes: []Box) {
 	if r == nil || b == nil {return}
 	if t := r.textures[rawptr(b)]; t != nil && t.image == egl.NO_IMAGE {
 		if !current(r) {return}
@@ -135,14 +131,9 @@ update :: proc(r: ^Renderer, b: ^wlr.wlr_buffer, boxes: []Box) {
 
 upload :: proc(t: ^Texture, boxes: []Box, full: bool) -> bool {
 	if t.renderer.lost {return false}
-	data: rawptr
-	format: u32
-	stride: c.size_t
-	accessible := wlr.buffer_access(
-		t.buffer, wlr.WLR_BUFFER_DATA_PTR_ACCESS_READ, &data, &format, &stride,
-	)
+	data, format, stride, accessible := buffers.access_begin(t.buffer, .Read)
 	if !accessible {return false}
-	defer wlr.buffer_access_end(t.buffer)
+	defer buffers.access_end(t.buffer)
 	if format != gbm.ARGB8888 && format != gbm.XRGB8888 {
 		reject(t.renderer, format)
 		return false

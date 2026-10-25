@@ -1,13 +1,14 @@
 package seat
 
+import sf "../surfaces"
+
 import wl "../wayland"
 import p "../protocols"
-import wlr "../wlroots"
 import "base:runtime"
 import "core:math"
 
 Pointer_State :: struct {
-	focused_surface: ^wlr.Surface,
+	focused_surface: ^sf.Surface,
 	focused_client: ^Client,
 	sx, sy: f64,
 	buttons: [dynamic]struct { code: u32, count: int },
@@ -15,7 +16,7 @@ Pointer_State :: struct {
 	sent_axis_source: bool,
 	destroy: wl.Listener,
 }
-Cursor_Event :: struct { seat_client: ^Client, surface: ^wlr.Surface, serial: u32, hotspot_x, hotspot_y: i32 }
+Cursor_Event :: struct { seat_client: ^Client, surface: ^sf.Surface, serial: u32, hotspot_x, hotspot_y: i32 }
 fixed :: proc(value: f64) -> wl.Fixed { return wl.Fixed(math.round(value*256)) }
 pointer_frame :: proc(r: ^wl.Resource) { if r.version >= 5 { wl.post(r, u32(p.Wl_Pointer_Event.frame)) } }
 pointer_entered :: proc(c: ^Client, serial: u32) {
@@ -45,14 +46,13 @@ pointer_request :: proc(r: ^wl.Resource, request: p.Wl_Pointer_Request, args: []
 	event := Cursor_Event{c, surface, c.enter_serial, i32(args[2].(wl.Int)), i32(args[3].(wl.Int))}
 	wl.signal_emit_mutable(&c.seat.events.request_set_cursor, &event)
 }
-pointer_surface_gone :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+pointer_surface_gone :: proc (listener: ^wl.Listener, data: rawptr) {
 	state := wl.owner(listener, Pointer_State, "destroy")
 	s := runtime.container_of(state, Seat, "pointer_state")
 	context = s.display.loop.ctx
 	pointer_notify_clear_focus(s)
 }
-pointer_notify_enter :: proc(s: ^Seat, surface: ^wlr.Surface, sx, sy: f64) {
+pointer_notify_enter :: proc(s: ^Seat, surface: ^sf.Surface, sx, sy: f64) {
 	if s.drag != nil { drag_enter(s.drag, surface, sx, sy); return }
 	state := &s.pointer_state
 	if state.focused_surface == surface { return }

@@ -1,5 +1,7 @@
 package compositor
 
+import sf "../surfaces"
+
 import st "../seat"
 import km "../keymap"
 import wl "../wayland"
@@ -47,7 +49,7 @@ owned_seat_keyboard_keymap_pressed_keys_and_display_serials :: proc(t: ^testing.
 	press := wlr.wlr_keyboard_key_event{keycode=42,state=1}
 	st.keyboard_update_key(&kb,&press)
 	testing.expect(t, kb.modifiers.depressed != 0 && km.modifier_mask(kb.state)&1 != 0)
-	surface := wlr.wlr_surface_from_resource(wl.client_get_object(c.client,6))
+	surface := sf.of(wl.client_get_object(c.client,6))
 	before := s.display.serial
 	st.keyboard_notify_enter(s.seat,surface)
 	events = extension_pump(&c)
@@ -176,7 +178,7 @@ owned_pointer_cursor_surface_commits_and_rejects_other_roles :: proc(t: ^testing
 	serial := extension_focus(s,&c)
 	extension_send(&c,[]u32{5,12<<16,11,4,24<<16,serial,11,2,3})
 	testing.expect(t,extension_event(extension_pump(&c),1,0) == nil)
-	cursor := wlr.wlr_surface_from_resource(wl.client_get_object(c.client,11))
+	cursor := sf.of(wl.client_get_object(c.client,11))
 	extension_send(&c,[]u32{11,20<<16|1,22,0,0,11,8<<16|6})
 	testing.expect(t,extension_event(extension_pump(&c),1,0) == nil && cursor.mapped)
 	testing.expect_value(t,cursor.current.width,i32(64))

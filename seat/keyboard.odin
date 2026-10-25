@@ -1,5 +1,7 @@
 package seat
 
+import sf "../surfaces"
+
 import wl "../wayland"
 import p "../protocols"
 import wlr "../wlroots"
@@ -27,7 +29,7 @@ Keyboard :: struct {
 }
 Keyboard_State :: struct {
 	keyboard: ^Keyboard,
-	focused_surface: ^wlr.Surface,
+	focused_surface: ^sf.Surface,
 	focused_client: ^Client,
 	modifiers: Modifiers,
 	keycodes: [dynamic]u32,
@@ -158,18 +160,17 @@ keyboard_send_enter :: proc(r: ^wl.Resource, serial: u32, state: ^Keyboard_State
 keyboard_send_modifiers :: proc(r: ^wl.Resource, serial: u32, m: Modifiers) {
 	wl.post(r, u32(p.Wl_Keyboard_Event.modifiers), wl.Uint(serial), wl.Uint(m.depressed), wl.Uint(m.latched), wl.Uint(m.locked), wl.Uint(m.group))
 }
-keyboard_surface_gone :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+keyboard_surface_gone :: proc (listener: ^wl.Listener, data: rawptr) {
 	state := wl.owner(listener, Keyboard_State, "destroy")
 	s := runtime.container_of(state, Seat, "keyboard_state")
 	context = s.display.loop.ctx
 	keyboard_notify_clear_focus(s)
 }
-keyboard_notify_enter :: proc(s: ^Seat, surface: ^wlr.Surface) {
+keyboard_notify_enter :: proc(s: ^Seat, surface: ^sf.Surface) {
 	kb := get_keyboard(s)
 	keyboard_enter(s, surface, kb.keycodes[:] if kb != nil else nil, kb.modifiers if kb != nil else Modifiers{})
 }
-keyboard_enter :: proc(s: ^Seat, surface: ^wlr.Surface, keys: []u32, modifiers: Modifiers) {
+keyboard_enter :: proc(s: ^Seat, surface: ^sf.Surface, keys: []u32, modifiers: Modifiers) {
 	state := &s.keyboard_state
 	if state.focused_surface == surface { return }
 	if c := state.focused_client; c != nil {

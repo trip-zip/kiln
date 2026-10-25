@@ -3,8 +3,7 @@ package scene_paint
 import images "../images"
 import layout "../layout"
 import paint "../paint"
-import wlr "../wlroots"
-import "core:c"
+import "../buffers"
 import "core:testing"
 
 @(test)
@@ -28,24 +27,17 @@ ring_tiles_preserve_holes_and_release_buffers :: proc(t: ^testing.T) {
 	}
 	testing.expect(t, fixture_alpha(n, 20, 1) > 0)
 	b := n.buffers[0]
-	var_data: rawptr
-	format: u32
-	stride: c.size_t
-	testing.expect(
-		t,
-		!wlr.wlr_buffer_begin_data_ptr_access(&b.base, 2, &var_data, &format, &stride),
-	)
-	testing.expect(
-		t,
-		wlr.wlr_buffer_begin_data_ptr_access(&b.base, 1, &var_data, &format, &stride),
-	)
+	_, _, _, writable := buffers.access_begin(&b.base, .Write)
+	testing.expect(t, !writable)
+	_, format, stride, readable := buffers.access_begin(&b.base, .Read)
+	testing.expect(t, readable)
 	testing.expect_value(t, format, 0x34325241)
 	testing.expect_value(t, stride, 80)
-	wlr.wlr_buffer_end_data_ptr_access(&b.base)
-	wlr.wlr_buffer_lock(&b.base)
+	buffers.access_end(&b.base)
+	buffers.lock(&b.base)
 	destroy(n)
 	testing.expect_value(t, live_buffers, before + 1)
-	wlr.wlr_buffer_unlock(&b.base)
+	buffers.unlock(&b.base)
 	testing.expect_value(t, live_buffers, before)
 	testing.expect_value(t, live_bytes, bytes)
 	command.box = {0, 0, 1200, 700}

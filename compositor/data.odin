@@ -6,7 +6,6 @@ import sp "../scene_paint"
 import vm "../lua_runtime"
 import wl "../wayland"
 import st "../seat"
-import "base:runtime"
 
 drag_icon_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	s := wl.owner(listener, Server, "drag_icon_destroy")
@@ -32,8 +31,7 @@ drag_position :: proc(s: ^Server) {
 		sp.refresh_subscriptions(&o.paint)
 	}
 }
-drag_committed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+drag_committed :: proc (listener: ^wl.Listener, data: rawptr) {
 	s := wl.owner(listener, Server, "drag_commit")
 	s.drag_dx += s.drag_icon.surface.current.dx
 	s.drag_dy += s.drag_icon.surface.current.dy

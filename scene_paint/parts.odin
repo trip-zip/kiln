@@ -1,5 +1,7 @@
 package scene_paint
 
+import sf "../surfaces"
+
 import sh "../shells"
 import wl "../wayland"
 import wlr "../wlroots"
@@ -10,7 +12,7 @@ DRAG_ICON_ID :: u32(0xffffffff)
 
 Scene :: struct {
 	renderer:                     ^gles.Renderer,
-	sources:                      map[^wlr.Surface]^Source,
+	sources:                      map[^sf.Surface]^Source,
 	new_surface:                  wl.Listener,
 	allocator:                    runtime.Allocator,
 	outputs:                      [dynamic]^Output,
@@ -19,7 +21,7 @@ Scene :: struct {
 scene_create :: proc() -> ^Scene {
 	s := new(Scene)
 	s.allocator = context.allocator
-	s.sources = make(map[^wlr.Surface]^Source)
+	s.sources = make(map[^sf.Surface]^Source)
 	return s
 }
 
@@ -89,22 +91,21 @@ contains :: proc(box: wlr.Box, x, y: f64) -> bool {
 }
 
 Surface_Position :: struct {
-	surface: ^wlr.Surface,
+	surface: ^sf.Surface,
 	x, y:    i32,
 	popup:   bool,
 }
 
-collect_surface :: proc "c" (surface: ^wlr.Surface, x, y: i32, data: rawptr) {
-	context = runtime.default_context()
+collect_surface :: proc (surface: ^sf.Surface, x, y: i32, data: rawptr) {
 	append((^[dynamic]Surface_Position)(data), Surface_Position{surface = surface, x = x, y = y})
 }
-collect_popup :: proc(surface: ^wlr.Surface, x,y: i32, data: rawptr) {
+collect_popup :: proc(surface: ^sf.Surface, x,y: i32, data: rawptr) {
 	append((^[dynamic]Surface_Position)(data), Surface_Position{surface=surface,x=x,y=y})
 }
 current_surfaces :: proc(p: Part) -> [dynamic]Surface_Position {
 	list := make([dynamic]Surface_Position, context.temp_allocator)
 	if p.surface == nil || !p.surface.mapped {return list}
-	wlr.surface_each(p.surface, collect_surface, &list)
+	sf.each(p.surface, collect_surface, &list)
 	base := len(list)
 	sh.popups(p.surface, collect_popup, &list)
 	for &position, i in list {
@@ -141,7 +142,7 @@ draw_order :: proc(o: ^Output) -> [dynamic]Draw_Item {
 	return items
 }
 
-client_at :: proc(o: ^Output, x, y: f64) -> (surface: ^wlr.Surface, id: u32, sx, sy: f64) {
+client_at :: proc(o: ^Output, x, y: f64) -> (surface: ^sf.Surface, id: u32, sx, sy: f64) {
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
 	for popups in ([2]bool{true, false}) {
 		for i := len(o.parts) - 1; i >= 0; i -= 1 {
@@ -151,7 +152,7 @@ client_at :: proc(o: ^Output, x, y: f64) -> (surface: ^wlr.Surface, id: u32, sx,
 			for j := len(positions) - 1; j >= 0; j -= 1 {
 				v := positions[j]
 				if v.popup != popups || (!popups && !contains(p.box, x, y)) {continue}
-				surface = wlr.surface_at(v.surface, x - f64(v.x), y - f64(v.y), &sx, &sy)
+				surface = sf.at(v.surface, x - f64(v.x), y - f64(v.y), &sx, &sy)
 				if surface != nil {return surface, p.id, sx, sy}
 			}
 		}

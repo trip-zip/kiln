@@ -1,5 +1,7 @@
 package scene_paint
 
+import sf "../surfaces"
+
 import wl "../wayland"
 import wlr "../wlroots"
 import "base:runtime"
@@ -7,7 +9,7 @@ import "base:runtime"
 // These are native event subscriptions only: placement always comes from the part list.
 Surface_Events :: struct {
 	output:                       ^Output,
-	surface:                      ^wlr.Surface,
+	surface:                      ^sf.Surface,
 	id:                           u32,
 	commit, map_, unmap, destroy: wl.Listener,
 	needed, entered, visible:     bool,
@@ -18,8 +20,7 @@ Subscription_Context :: struct {
 	id:     u32,
 }
 
-subscribe :: proc "c" (surface: ^wlr.Surface, x, y: i32, data: rawptr) {
-	context = runtime.default_context()
+subscribe :: proc (surface: ^sf.Surface, x, y: i32, data: rawptr) {
 	args := (^Subscription_Context)(data)
 	o := args.output
 	context.allocator = o.scene.allocator
@@ -47,10 +48,10 @@ refresh_subscriptions :: proc(o: ^Output) {
 	for p in o.parts {
 		if p.kind != .Client || p.surface == nil {continue}
 		args := Subscription_Context{o, p.id}
-		wlr.surface_known(p.surface, subscribe, &args)
+		sf.known(p.surface, subscribe, &args)
 		positions := current_surfaces(p)
 		for v in positions {
-			if v.popup {wlr.surface_known(v.surface, subscribe, &args)}
+			if v.popup {sf.known(v.surface, subscribe, &args)}
 		}
 	}
 	if o.cursor.surface != nil {
@@ -67,9 +68,9 @@ surface_visibility :: proc(e: ^Surface_Events, visible: bool) {
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
 	e.entered = visible
 	if visible {
-		wlr.surface_enter(e.surface, e.output.handle)
+		sf.enter(e.surface, e.output.handle)
 	} else {
-		wlr.surface_leave(e.surface, e.output.handle)
+		sf.leave(e.surface, e.output.handle)
 	}
 	outputs := make([dynamic]^wlr.wlr_output, context.temp_allocator)
 	for o in e.output.scene.outputs {
@@ -77,7 +78,7 @@ surface_visibility :: proc(e: ^Surface_Events, visible: bool) {
 			if other.surface == e.surface && other.entered {append(&outputs, o.handle)}
 		}
 	}
-	wlr.surface_density(e.surface, outputs[:])
+	sf.density(e.surface, outputs[:])
 }
 
 unsubscribe :: proc(e: ^Surface_Events) {
@@ -112,24 +113,20 @@ changed_surface :: proc(e: ^Surface_Events) {
 	refresh_subscriptions(o)
 }
 
-surface_changed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+surface_changed :: proc (listener: ^wl.Listener, data: rawptr) {
 	e := wl.owner(listener, Surface_Events, "commit")
 	changed_surface(e)
 }
 
-surface_mapped :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+surface_mapped :: proc (listener: ^wl.Listener, data: rawptr) {
 	changed_surface(wl.owner(listener, Surface_Events, "map_"))
 }
 
-surface_unmapped :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+surface_unmapped :: proc (listener: ^wl.Listener, data: rawptr) {
 	changed_surface(wl.owner(listener, Surface_Events, "unmap"))
 }
 
-surface_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+surface_destroyed :: proc (listener: ^wl.Listener, data: rawptr) {
 	e := wl.owner(listener, Surface_Events, "destroy")
 	o := e.output
 	context.allocator = o.scene.allocator

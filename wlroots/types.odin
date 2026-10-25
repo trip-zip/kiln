@@ -100,46 +100,6 @@ wlr_output_event_commit :: struct { output: ^wlr_output, when_: posix.timespec, 
 #assert(offset_of(wlr_output_event_commit, state) == 24)
 
 #assert(size_of(wlr_output_event_request_state) == 16 && align_of(wlr_output_event_request_state) == 8 && offset_of(wlr_output_event_request_state, state) == 8)
-wlr_surface_events :: struct #align(8) {
-	_opaque_0: [16]u8,
-	commit: wl.Signal,
-	map_: wl.Signal,
-	unmap: wl.Signal,
-	_opaque_64: [16]u8,
-	destroy: wl.Signal,
-}
-#assert(size_of(wlr_surface_events) == 96 && align_of(wlr_surface_events) == 8 && offset_of(wlr_surface_events, commit) == 16 && offset_of(wlr_surface_events, map_) == 32 && offset_of(wlr_surface_events, unmap) == 48)
-
-wlr_surface :: struct #align(8) {
-	resource: ^wl.Resource,
-	_opaque_8: [16]u8,
-	buffer_damage: pixman_region32_t,
-	_opaque_48:    [24]u8,
-	input_region: pixman_region32_t,
-	current: wlr_surface_state,
-	pending: wlr_surface_state,
-	_opaque_672: [16]u8,
-    mapped: bool,
-    _opaque_689: [23]u8,
-	events: wlr_surface_events,
-	_opaque_808: [160]u8,
-}
-wlr_surface_state :: struct #align(8) {
-	_opaque_0: [8]u8,
-	buffer:                               ^wlr_buffer,
-    dx,dy: i32,
-    _opaque_24: [96]u8,
-    transform: i32,
-    _opaque_124: [20]u8,
-	width,height: i32,
-	buffer_width, buffer_height: i32,
-    subsurfaces_below, subsurfaces_above: wl.List,
-    _opaque_192: [96]u8,
-}
-#assert(size_of(wlr_surface_state)==288 && align_of(wlr_surface_state)==8 && offset_of(wlr_surface_state,width)==144 && offset_of(wlr_surface_state,height)==148)
-#assert(offset_of(wlr_surface_state,buffer_width)==152 && offset_of(wlr_surface_state,buffer_height)==156 && offset_of(wlr_surface,current)==96 && offset_of(wlr_surface, resource) == 0)
-#assert(size_of(wlr_surface) == 968 && align_of(wlr_surface) == 8 && offset_of(wlr_surface, events) == 712 && offset_of(wlr_surface,mapped)==688)
-
 wlr_input_device_events :: struct #align(8) {
 	destroy: wl.Signal,
 }
@@ -245,7 +205,6 @@ wlr_output_layout :: struct #align(8) {
 
 #assert(offset_of(wlr_output,commit_seq)==188 && offset_of(wlr_output_events,present)==80)
 
-#assert(offset_of(wlr_surface, buffer_damage) == 24 && offset_of(wlr_surface_state, buffer) == 8)
 
 #assert(offset_of(wlr_output_state, committed) == 0 && offset_of(wlr_output_state, enabled) == 32 && offset_of(wlr_output_state, buffer) == 56)
 #assert(offset_of(wlr_output_state, mode_type) == 116 && offset_of(wlr_output_state, mode) == 120 && offset_of(wlr_output_state, custom_mode) == 128)
@@ -254,7 +213,6 @@ wlr_output_layout :: struct #align(8) {
 
 #assert(offset_of(wlr_output_events, bind) == 96)
 
-#assert(offset_of(wlr_surface, pending) == 384)
 
 #assert(offset_of(wlr_pointer, events) == 128 && size_of(type_of(wlr_pointer{}.events)) == 208 && offset_of(type_of(wlr_pointer{}.events), motion) == 0 && offset_of(type_of(wlr_pointer{}.events), motion_absolute) == 16)
 #assert(offset_of(type_of(wlr_pointer{}.events), button) == 32 && offset_of(type_of(wlr_pointer{}.events), axis) == 48 && offset_of(type_of(wlr_pointer{}.events), frame) == 64 && offset_of(wlr_keyboard, events)==312)

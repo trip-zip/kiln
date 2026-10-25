@@ -1,5 +1,7 @@
 package extensions
 
+import sf "../surfaces"
+
 import st "../seat"
 
 import p "../protocols"
@@ -37,7 +39,7 @@ Foreign_Maximized_Event :: struct { toplevel: ^Foreign_Handle, maximized: bool }
 Foreign_Minimized_Event :: struct { toplevel: ^Foreign_Handle, minimized: bool }
 Foreign_Activated_Event :: struct { toplevel: ^Foreign_Handle, seat: ^st.Seat }
 Foreign_Fullscreen_Event :: struct { toplevel: ^Foreign_Handle, fullscreen: bool, output: ^wlr.wlr_output }
-Foreign_Rectangle_Event :: struct { toplevel: ^Foreign_Handle, surface: ^wlr.wlr_surface, x, y, width, height: i32 }
+Foreign_Rectangle_Event :: struct { toplevel: ^Foreign_Handle, surface: ^sf.Surface, x, y, width, height: i32 }
 
 foreign_manager_create :: proc(display: ^wl.Display) -> ^Foreign_Manager {
 	context = display.loop.ctx

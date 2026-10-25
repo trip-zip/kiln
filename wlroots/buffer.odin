@@ -5,8 +5,6 @@ import wl "../wayland"
 foreign import lib "system:wlroots-0.20"
 
 WLR_BUFFER_CAP_DMABUF :: u32(1 << 1)
-WLR_BUFFER_DATA_PTR_ACCESS_READ :: u32(1 << 0)
-WLR_BUFFER_DATA_PTR_ACCESS_WRITE :: u32(1 << 1)
 
 wlr_buffer :: struct #align(8) {
 	_opaque_0: [8]u8,
@@ -27,9 +25,6 @@ wlr_dmabuf_attributes :: struct {
 #assert(offset_of(wlr_dmabuf_attributes, width) == 0 && offset_of(wlr_dmabuf_attributes, height) == 4 && offset_of(wlr_dmabuf_attributes, format) == 8 && size_of(wlr_dmabuf_attributes) == 80 && align_of(wlr_dmabuf_attributes) == 8)
 #assert(offset_of(wlr_dmabuf_attributes, modifier) == 16 && offset_of(wlr_dmabuf_attributes, n_planes) == 24)
 #assert(offset_of(wlr_dmabuf_attributes, offset) == 28 && offset_of(wlr_dmabuf_attributes, stride) == 44 && offset_of(wlr_dmabuf_attributes, fd) == 60)
-wlr_shm_attributes :: struct { fd: i32, format: u32, width, height, stride: i32, offset: i64 }
-#assert(size_of(wlr_shm_attributes) == 32 && align_of(wlr_shm_attributes) == 8 && offset_of(wlr_shm_attributes, fd) == 0 && offset_of(wlr_shm_attributes, format) == 4)
-#assert(offset_of(wlr_shm_attributes, width) == 8 && offset_of(wlr_shm_attributes, height) == 12 && offset_of(wlr_shm_attributes, stride) == 16 && offset_of(wlr_shm_attributes, offset) == 24)
 wlr_buffer_impl :: struct {
 	destroy: proc "c" (buffer: ^wlr_buffer),
 	get_dmabuf: proc "c" (buffer: ^wlr_buffer, attribs: ^wlr_dmabuf_attributes) -> bool,
@@ -43,19 +38,16 @@ wlr_buffer_impl :: struct {
 wlr_fbox :: struct { x,y,width,height: f64 }
 #assert(size_of(wlr_fbox)==32 && align_of(wlr_fbox)==8 && offset_of(wlr_fbox,x)==0 && offset_of(wlr_fbox,y)==8 && offset_of(wlr_fbox,width)==16 && offset_of(wlr_fbox,height)==24)
 foreign lib {
-	wlr_buffer_get_shm :: proc(buffer: ^wlr_buffer, attrs: ^wlr_shm_attributes) -> bool ---
-	wlr_buffer_get_dmabuf :: proc(buffer: ^wlr_buffer, attrs: ^wlr_dmabuf_attributes) -> bool ---
 	wlr_buffer_finish :: proc(buffer: ^wlr_buffer) ---
 	wlr_buffer_init :: proc(buffer: ^wlr_buffer, impl: ^wlr_buffer_impl, width,height: c.int) ---
 	wlr_buffer_drop :: proc(buffer: ^wlr_buffer) ---
 	wlr_buffer_lock :: proc(buffer: ^wlr_buffer) -> ^wlr_buffer ---
 	wlr_buffer_unlock :: proc(buffer: ^wlr_buffer) ---
-	wlr_buffer_begin_data_ptr_access :: proc(buffer: ^wlr_buffer, flags: u32, data: ^rawptr, format: ^u32, stride: ^c.size_t) -> bool ---
-	wlr_buffer_end_data_ptr_access :: proc(buffer: ^wlr_buffer) ---
 }
 
-buffer_dmabuf :: wlr_buffer_get_dmabuf
-buffer_access :: wlr_buffer_begin_data_ptr_access
-buffer_access_end :: wlr_buffer_end_data_ptr_access
 
 buffer_finish :: wlr_buffer_finish
+
+Render_Buffer :: wlr_buffer
+buffer_retain :: wlr_buffer_lock
+buffer_release :: wlr_buffer_unlock

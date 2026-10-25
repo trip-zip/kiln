@@ -1,10 +1,11 @@
 package compositor
 
+import sf "../surfaces"
+
 import xw "../xwayland"
 
 import vm "../lua_runtime"
 import wl "../wayland"
-import wlr "../wlroots"
 import "core:strings"
 import "core:testing"
 
@@ -16,7 +17,7 @@ x11_snapshots_use_associated_commits_and_owned_metadata :: proc(t: ^testing.T) {
 	testing.expect(t, vm.init(&s.lua))
 	defer destroy(&s)
 
-	surface := wlr.wlr_surface {
+	surface := sf.Surface {
 		current = {width = 301, height = 207},
 	}
 	title := strings.clone("title")

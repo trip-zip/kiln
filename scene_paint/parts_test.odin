@@ -1,5 +1,8 @@
 package scene_paint
 
+import sf "../surfaces"
+
+import rg "../region"
 import sh "../shells"
 import wl "../wayland"
 import raw "../wayland"
@@ -37,11 +40,9 @@ flat_publication_damages_old_and_new_device_boxes :: proc(t: ^testing.T) {
 	testing.expect(t, len(o.parts) == 0 && len(o.damage) > 0)
 }
 
-fixture_surface :: proc(s: ^wlr.Surface) {
+fixture_surface :: proc(s: ^sf.Surface) {
 	s.mapped = true
 	s.current.width, s.current.height = 80, 60
-	wl.init(&s.current.subsurfaces_below)
-	wl.init(&s.current.subsurfaces_above)
 	for signal in ([]^wl.Signal{&s.events.commit, &s.events.map_, &s.events.unmap, &s.events.destroy}) {
 		wl.init(&signal.listener_list)
 	}
@@ -59,14 +60,16 @@ current_subsurface_order_and_desynchronized_damage :: proc(t: ^testing.T) {
 		height = 150,
 	}
 	defer output_finish(&o)
-	parent, child: wlr.Surface
+	parent, child: sf.Surface
 	fixture_surface(&parent)
 	fixture_surface(&child)
-	sub := wlr.wlr_subsurface {
+	sub := sf.Subsurface {
 		surface = &child,
 		current = {x = 11, y = 17},
 	}
-	wl.insert(&parent.current.subsurfaces_below, &sub.current.link)
+	append(&parent.current.below,sf.Child{&sub,sub.current.x,sub.current.y})
+ defer delete(parent.current.below)
+ defer delete(parent.current.above)
 	parts := [1]Part{{kind = .Client, id = 7, surface = &parent, box = {10, 20, 80, 60}}}
 	publish(&o, parts[:])
 	testing.expect_value(t, len(o.subscriptions), 2)
@@ -77,9 +80,9 @@ current_subsurface_order_and_desynchronized_damage :: proc(t: ^testing.T) {
 	)
 	testing.expect_value(t, positions[0].x, 21)
 	testing.expect_value(t, positions[0].y, 37)
-	raw.list_remove(&sub.current.link)
-	wl.insert(&parent.current.subsurfaces_above, &sub.current.link)
-	sub.current.x, sub.current.y = -9, 31
+	clear(&parent.current.below); clear(&parent.current.above)
+	append(&parent.current.above,sf.Child{&sub,sub.current.x,sub.current.y})
+	parent.current.above[0].x, parent.current.above[0].y = -9, 31
 	raw.signal_emit_mutable(&parent.events.commit, &parent)
 	positions = current_surfaces(o.parts[0])
 	testing.expect(t, positions[0].surface == &parent && positions[1].surface == &child)
@@ -94,7 +97,7 @@ current_subsurface_order_and_desynchronized_damage :: proc(t: ^testing.T) {
 	clear(&o.damage)
 	raw.signal_emit_mutable(&child.events.commit, &child)
 	testing.expect(t, len(o.damage) > 0)
-	raw.list_remove(&sub.current.link)
+	clear(&parent.current.below); clear(&parent.current.above)
 	raw.signal_emit_mutable(&child.events.destroy, &child)
 	testing.expect_value(t, len(o.subscriptions), 1)
 	testing.expect(t, wl.empty(&child.events.commit.listener_list))
@@ -105,18 +108,19 @@ current_subsurface_order_and_desynchronized_damage :: proc(t: ^testing.T) {
 
 @(test)
 client_hit_resolves_current_subsurfaces_without_raster_picking :: proc(t: ^testing.T) {
-	parent, child: wlr.Surface
+	parent, child: sf.Surface
 	fixture_surface(&parent)
 	fixture_surface(&child)
 	testing.expect(t, test_region_begin(&parent.input_region, []wlr.Box{{0, 0, 80, 60}}))
 	testing.expect(t, test_region_begin(&child.input_region, []wlr.Box{{0, 0, 20, 20}}))
 	defer test_region_finish(&parent.input_region)
 	defer test_region_finish(&child.input_region)
-	sub := wlr.wlr_subsurface {
+	sub := sf.Subsurface {
 		surface = &child,
 		current = {x = 10, y = 15},
 	}
-	wl.insert(&parent.current.subsurfaces_above, &sub.current.link)
+	append(&parent.current.above,sf.Child{&sub,sub.current.x,sub.current.y})
+	defer delete(parent.current.above)
 	o: Output
 	defer output_finish(&o)
 	append(&o.parts, Part{kind = .Client, id = 7, surface = &parent, box = {30, 40, 80, 60}})
@@ -135,21 +139,21 @@ client_hit_resolves_current_subsurfaces_without_raster_picking :: proc(t: ^testi
 @(test)
 later_parts_cannot_occlude_client_popups :: proc(t: ^testing.T) {
 	runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
-	parent, popup_surface, later: wlr.Surface
+	parent, popup_surface, later: sf.Surface
 	fixture_surface(&parent)
 	fixture_surface(&popup_surface)
 	fixture_surface(&later)
-	for surface in ([]^wlr.Surface{&parent, &popup_surface, &later}) {
+	for surface in ([]^sf.Surface{&parent, &popup_surface, &later}) {
 		testing.expect(t, test_region_begin(&surface.input_region, []wlr.Box{{0, 0, 80, 60}}))
-		defer test_region_finish(&surface.input_region)
 	}
+	defer for surface in ([]^sf.Surface{&parent,&popup_surface,&later}) { test_region_finish(&surface.input_region) }
 	base := new(sh.Xdg_Surface); base.surface = &parent
 	defer free(base)
 	popup := sh.Popup{surface=&popup_surface,parent=&parent,current={geometry={10,15,80,60}}}
 	append(&base.popups,&popup)
 	defer delete(base.popups)
 	saved := sh.roles
-	sh.roles = make(map[^wlr.Surface]sh.Surface_Object)
+	sh.roles = make(map[^sf.Surface]sh.Surface_Object)
 	sh.roles[&parent] = base
 	defer { delete(sh.roles); sh.roles = saved }
 	o := Output {
@@ -221,17 +225,17 @@ reacquired_buffer_repaints_only_damage_since_presentation :: proc(t: ^testing.T)
 	testing.expect_value(t, boxes[1], box2)
 	testing.expect_value(t, boxes[2], box3)
 	// Check the actual pass clip point by point, including the gap between rectangles.
-	region: wlr.pixman_region32_t
+	region: rg.Region
 	testing.expect(t, test_region_begin(&region, boxes[:]))
 	defer test_region_finish(&region)
-	surface: wlr.Surface
+	surface: sf.Surface
 	fixture_surface(&surface)
 	surface.input_region = region
 	surface.current.width, surface.current.height = 100, 80
 	for y in 0 ..< 80 {
 		for x in 0 ..< 100 {
 			sx, sy: f64
-			hit := wlr.surface_at(&surface, f64(x), f64(y), &sx, &sy) != nil
+			hit := sf.at(&surface, f64(x), f64(y), &sx, &sy) != nil
 			expected :=
 				contains(box1, f64(x), f64(y)) ||
 				contains(box2, f64(x), f64(y)) ||
@@ -250,17 +254,7 @@ reacquired_buffer_repaints_only_damage_since_presentation :: proc(t: ^testing.T)
 	testing.expect(t, wl.empty(&a.events.destroy.listener_list))
 }
 
-foreign import test_pixman "system:pixman-1"
-foreign test_pixman {
-	@(link_name = "pixman_region32_init_rects")
-	test_region_init :: proc(region: ^wlr.pixman_region32_t, boxes: [^]wlr.pixman_box32_t, count: i32) -> i32 ---
-	@(link_name = "pixman_region32_fini")
-	test_region_finish :: proc(region: ^wlr.pixman_region32_t) ---
-}
-
-test_region_begin :: proc(region: ^wlr.pixman_region32_t, boxes: []wlr.Box) -> bool {
-	rects := make([]wlr.pixman_box32_t, len(boxes))
-	defer delete(rects)
-	for b, i in boxes {rects[i] = {b.x, b.y, b.x + b.width, b.y + b.height}}
-	return test_region_init(region, raw_data(rects), i32(len(rects))) != 0
+test_region_finish :: rg.finish
+test_region_begin :: proc(region: ^rg.Region, boxes: []wlr.Box) -> bool {
+ for b in boxes { rg.union_rect(region,rg.Box(b)) }; return true
 }

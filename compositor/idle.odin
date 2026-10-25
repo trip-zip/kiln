@@ -1,11 +1,12 @@
 package compositor
 
+import sf "../surfaces"
+
 import ext "../extensions"
 
 import "core:time"
 import vm "../lua_runtime"
 import wl "../wayland"
-import wlr "../wlroots"
 import "base:runtime"
 
 Idle_Inhibitor :: struct {
@@ -43,9 +44,9 @@ idle_activity :: proc(s: ^Server) {
 		queue_event(s, vm.Event{class = "idle", name = "stop"})}
 	if s.idle_timeout_ms > 0 {wl.arm_timer(s.idle_timer, time.Duration(s.idle_timeout_ms)*time.Millisecond)}
 }
-inhibitor_visible :: proc(s: ^Server, surface: ^wlr.wlr_surface) -> bool {
+inhibitor_visible :: proc(s: ^Server, surface: ^sf.Surface) -> bool {
 	if surface == nil || !surface.mapped {return false}
-	root := wlr.surface_root(surface)
+	root := sf.root(surface)
 	for v in s.views {if view_surface(v) == root {return v.mapped && v.output != nil && v.output.handle.enabled && client_visible(v.output, v.id)}}
 	for l in s.layers {if l.handle.surface == root {return l.mapped && l.output != nil && l.output.handle.enabled && client_visible(l.output, l.id)}}
 	for p in s.popups {if p.handle.base.surface == root {return p.mapped && popup_visible(p)}}
@@ -75,12 +76,10 @@ idle_inhibitor_added :: proc "c" (listener: ^wl.Listener, data: rawptr) {
 	wl.listen(&i.handle.surface.events.unmap, &i.unmap, idle_surface_unmapped)
 	idle_recompute(s)
 }
-idle_surface_mapped :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+idle_surface_mapped :: proc (listener: ^wl.Listener, data: rawptr) {
 	idle_recompute(wl.owner(listener, Idle_Inhibitor, "map_").server)
 }
-idle_surface_unmapped :: proc "c" (listener: ^wl.Listener, data: rawptr) {
-	context = runtime.default_context()
+idle_surface_unmapped :: proc (listener: ^wl.Listener, data: rawptr) {
 	idle_recompute(wl.owner(listener, Idle_Inhibitor, "unmap").server)
 }
 idle_inhibitor_destroyed :: proc "c" (listener: ^wl.Listener, data: rawptr) {
