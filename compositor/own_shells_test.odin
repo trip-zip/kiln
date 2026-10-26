@@ -200,11 +200,16 @@ owned_decorations_force_server_mode_and_validate_lifetime :: proc(t: ^testing.T)
 		defer wl.connection_close(&c.peer)
 		events := extension_bind(&c, "org_kde_kwin_server_decoration_manager", 1, 12)
 		testing.expect_value(t, wl.word_read(extension_event(events, 12, 0), 8), u32(2))
-		extension_send(&c, []u32{12, 16<<16, 13, 6, 13, 12<<16|1, 1, 13, 12<<16|1, 0})
+		extension_send(&c, []u32{12, 16<<16, 13, 6, 13, 12<<16|1, 1, 13, 12<<16|1, 1, 13, 12<<16|1, 0})
 		events = extension_pump(&c)
 		testing.expect_value(t, extension_event_count(events, 13, 0), 3)
+		modes := [3]u32{2, 1, 0}
+		seen := 0
 		for at := 0; at < len(events); at += int(wl.word_read(events, at+4)>>16) {
-			if wl.word_read(events, at) == 13 { testing.expect_value(t, wl.word_read(events, at+8), u32(2)) }
+			if wl.word_read(events, at) == 13 && seen < len(modes) {
+				testing.expect_value(t, wl.word_read(events, at+8), modes[seen])
+				seen += 1
+			}
 		}
 		extension_bind(&c, "zxdg_decoration_manager_v1", 1, 10)
 		if scenario == 3 {

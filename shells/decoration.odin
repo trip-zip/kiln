@@ -87,13 +87,24 @@ legacy_bind :: proc(r: ^wl.Resource) { wl.post(r, u32(p.Org_Kde_Kwin_Server_Deco
 legacy_manager_request :: proc(r: ^wl.Resource, request: p.Org_Kde_Kwin_Server_Decoration_Manager_Request, args: []wl.Argument) {
 	switch request {
 	case .create:
-		decoration := wl.resource_create_typed(r.client, &p.org_kde_kwin_server_decoration, 1, u32(args[0].(wl.New_Id)), nil, legacy_request)
-		if decoration != nil { wl.post(decoration, u32(p.Org_Kde_Kwin_Server_Decoration_Event.mode), wl.Uint(2)) }
+		mode := new(u32)
+		mode^ = u32(p.Org_Kde_Kwin_Server_Decoration_Mode.Server)
+		decoration := wl.resource_create_typed(r.client, &p.org_kde_kwin_server_decoration, 1, u32(args[0].(wl.New_Id)), mode, legacy_request, legacy_destroy)
+		if decoration == nil { free(mode); return }
+		wl.post(decoration, u32(p.Org_Kde_Kwin_Server_Decoration_Event.mode), wl.Uint(mode^))
 	}
 }
+// The protocol acknowledges a request by echoing its mode. Answering with any
+// other mode makes the client ask again, and both sides spin forever.
 legacy_request :: proc(r: ^wl.Resource, request: p.Org_Kde_Kwin_Server_Decoration_Request, args: []wl.Argument) {
 	switch request {
 	case .release: wl.resource_destroy(r)
-	case .request_mode: wl.post(r, u32(p.Org_Kde_Kwin_Server_Decoration_Event.mode), wl.Uint(2))
+	case .request_mode:
+		mode := cast(^u32)r.data
+		requested := u32(args[0].(wl.Uint))
+		if requested > u32(p.Org_Kde_Kwin_Server_Decoration_Mode.Server) || requested == mode^ { return }
+		mode^ = requested
+		wl.post(r, u32(p.Org_Kde_Kwin_Server_Decoration_Event.mode), wl.Uint(requested))
 	}
 }
+legacy_destroy :: proc(r: ^wl.Resource) { free(r.data) }
