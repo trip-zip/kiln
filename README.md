@@ -1,5 +1,11 @@
 # Kiln
 
+### Note:
+Kiln is my playground for compositor experiments, not a planned successor to
+SomeWM or a project intended for general use. Experiments that work well and
+fit SomeWM’s goals may find their way into SomeWM, but using SomeWM does not
+mean being on a path to migrating to Kiln.
+
 A Wayland compositor in Odin, configured in Lua. Each output is one Clay
 layout tree: windows, bars, widgets, menus and notifications all live in it.
 Lua declares the tree when something changes, Clay solves it, and the
